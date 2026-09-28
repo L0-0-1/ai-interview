@@ -1,3 +1,20 @@
 # 应用服务 WEB 访问端口
-server.port=8080
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
+
+# In application.yml
+spring:
+  ai:
+    openai:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY}
+      chat:
+        options:
+          model: deepseek-flash
+          temperature: 0.7

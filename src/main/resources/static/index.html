@@ -1,6 +1,184 @@
-<html>
-    <body>
-        <h1>hello word!!!</h1>
-        <p>this is a html page</p>
-    </body>
+<!DOCTYPE html>
+<!-- html 文件自己也要声明 UTF-8：浏览器打开这个页面时，
+     按什么编码去读文件里的中文字符，就是这行 meta 决定的。
+     后端的 charset 管的是接口响应，这行管的是页面本身，两者各管各的。 -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 面试助手</title>
+    <style>
+        /* 样式尽量朴素：能看清、能滚动就够了 */
+        body {
+            font-family: sans-serif;
+            max-width: 700px;   /* 限制宽度，长行文字读起来不费劲 */
+            margin: 40px auto;  /* 整体居中 */
+        }
+        #chatBox {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 12px;
+            height: 420px;
+            overflow-y: auto;   /* 内容超出高度时出现滚动条 */
+            margin-bottom: 12px;
+        }
+        .question {
+            color: #0a6;        /* 用户问题用绿色，方便和回答区分 */
+            margin: 8px 0 4px;
+        }
+        .answer {
+            line-height: 1.6;
+            margin: 0 0 8px;
+            /* 注意：这里不再用 white-space: pre-wrap。之前显示纯文本时，
+               靠它把模型输出里的 \n 显示成换行；现在交给 marked 排版，
+               Markdown 规范里空行分段、缩进有它自己的含义，
+               若开 pre-wrap 会把源码里用于排版的空行也显示成大段空白 */
+        }
+        .answer pre {
+            background: #f5f5f5;   /* 代码块加灰底，和正文区分开 */
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;      /* 代码行太长时横向滚动，不撑破页面 */
+        }
+        .answer code {
+            background: #f5f5f5;   /* 行内代码同样加底色区分 */
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+        .answer pre code {
+            background: none;      /* 代码块内部的 code 不重复加底色 */
+            padding: 0;
+        }
+        #input {
+            width: 70%;
+            padding: 6px;
+        }
+        #sendBtn {
+            padding: 6px 16px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>AI 面试助手（流式演示）</h2>
+
+<!-- 三样东西：一个显示区、一个输入框、一个按钮。
+     显示区里每一轮追加「问题 + 回答」两个段落，回答段落边收边填字 -->
+<div id="chatBox"></div>
+<input id="input" type="text" placeholder="输入你的问题，回车或点发送">
+<button id="sendBtn">发送</button>
+
+<!-- marked.js：现成的 Markdown→HTML 渲染器，script 标签必须放在我们的
+     业务代码之前：浏览器按文档顺序解析 HTML，放在后面的话下面调用
+     marked 时它还没定义，会报 marked is not defined。
+     版本号写死（锁定版思路同 pom）：哪天 marked 改了 API，页面坏在这里
+     而不是坏在“莫名其妙” -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<!-- DOMPurify：HTML 消毒器，和 marked 配套的安全层（版本同样锁死）。
+     它和转义的区别：转义是无差别贴封条，消毒是先解析成 HTML 节点树、
+     按白名单留安全标签（p/code/h2…）、删危险物（script/onclick/伪协议链接），
+     排版保留、攻击面清除，这是行业标准做法 -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
+<script>
+    // 拿住三个 DOM 元素的引用，后面反复用
+    var chatBox = document.getElementById('chatBox');
+    var input = document.getElementById('input');
+    var sendBtn = document.getElementById('sendBtn');
+
+    // 当前活跃的 EventSource。用 null 表示「现在没有在流式回答」，
+    // 既用来防重复发送，也用来在 onerror 里判断是不是用户主动中断
+    var currentEs = null;
+
+    /**
+     * 方案 A：流结束后才渲染。流水线：原始文本 → marked → DOMPurify → innerHTML。
+     *
+     * 为什么不再「先 escapeHtml 再 marked」（那是缺陷做法）：
+     * 预先贴的封条在 marked 处理代码块时会被当成原文内容再封一层，
+     * 双重转义导致页面显示字面的 &gt;（正文正常、代码内容翻车，
+     * 因为 marked 在代码上下文里把所有字符都当字面量）。
+     * 现在的分工：marked 见到原始字符，代码块由它自己按上下文做唯一一次转义；
+     * 模型万一输出裸 HTML（Markdown 允许直通），由 DOMPurify 在产出物层面结构性清除。
+     */
+    function renderMarkdown(element, rawText) {
+        element.innerHTML = DOMPurify.sanitize(marked.parse(rawText));
+    }
+
+    function send() {
+        var message = input.value.trim();
+        // 空输入不发；正在流式回答时也不发（简单粗暴地防并发，
+        // 免得两个 EventSource 同时往页面上写字，输出交错）
+        if (message === '' || currentEs !== null) {
+            return;
+        }
+
+        // 1. 页面上先写入用户的问题
+        var qDiv = document.createElement('div');
+        qDiv.className = 'question';
+        // 用 textContent 而不是 innerHTML：用户输入里如果带 <>& 等字符，
+        // innerHTML 会把它当 HTML 标签解析（轻则显示错乱，重则 XSS），
+        // textContent 永远是纯文本，这是最省心的安全写法
+        qDiv.textContent = '我：' + message;
+        chatBox.appendChild(qDiv);
+
+        // 2. 预先创建一个空的「回答」段落。rawAnswer 在 JS 内存里攒完整文本，
+        //    流结束后拿它去渲染；页面上流式期间维持纯文本打字机
+        var rawAnswer = 'AI：';
+        var aDiv = document.createElement('div');
+        aDiv.className = 'answer';
+        aDiv.textContent = rawAnswer;
+        chatBox.appendChild(aDiv);
+
+        // 3. 建立 SSE 连接
+        //    encodeURIComponent：message 是用户随手输入的，可能包含 & # 空格
+        //    等对 URL 有特殊含义的字符，不编码的话 URL 结构会被破坏，
+        //    编码保证它无论长什么样都被原样当成参数值传过去
+        var es = new EventSource('/api/chat/stream?message=' + encodeURIComponent(message));
+        currentEs = es;
+
+        // 4. 流式期间禁用按钮，视觉上也告诉用户「正在回答，别急」
+        sendBtn.disabled = true;
+        input.value = '';
+
+        // 5. onmessage：EventSource 每解析出一块 data: 碎片就回调一次，
+        //    event.data 是剥掉前缀的纯文本碎片。
+        //    打字机效果的全部秘密就是这一行：来一片，贴一片，不做任何加工。
+        es.onmessage = function (event) {
+            // 打字机期间不走渲染：半截 Markdown（如只来了开头的 ```）渲染会
+            // 把后续内容误判进代码块，页面会抽搐式变形，所以先 textContent 拼纯文本
+            rawAnswer += event.data;
+            aDiv.textContent = rawAnswer;
+            // 每次追加后把滚动条拉到底，让用户始终看到最新的字
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+
+        // 6. onerror：EventSource 没有「正常结束」的回调，
+        //    服务器关闭连接时走的也是这个事件。
+        //    EventSource 默认会自动重连 → 模型把回答从头再生成一遍 → 页面重复输出。
+        //    所以这里必须手动 close()，明确告诉它「结束了，别重连」。
+        //    （副作用：真断网时也不会重试，学习项目里可以接受）
+        es.onerror = function () {
+            es.close();
+            currentEs = null;
+            sendBtn.disabled = false;
+            // 流结束，文本已完整，此时才把整段 Markdown 一次性排版替换上去。
+            // 加长度判断：回答长度还等于前缀「AI：」说明一个碎片都没收到（接口报错等），
+            // 此时没什么可渲染的，别拿「AI：」去走渲染器
+            if (rawAnswer.length > 3) {
+                renderMarkdown(aDiv, rawAnswer.substring(3));
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        };
+    }
+
+    sendBtn.onclick = send;
+
+    // 回车等价于点按钮，输入体验更像一个聊天框
+    input.onkeydown = function (event) {
+        if (event.key === 'Enter') {
+            send();
+        }
+    };
+</script>
+
+</body>
 </html>
