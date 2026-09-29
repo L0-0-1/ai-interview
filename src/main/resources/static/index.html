@@ -89,6 +89,18 @@
     // 既用来防重复发送，也用来在 onerror 里判断是不是用户主动中断
     var currentEs = null;
 
+    // 本次聊天窗口的对话编号，页面加载时生成一次，之后每条消息都共用它。
+    // 为什么在页面层生成而不是写死：后端靠这个编号区分「哪个对话用哪页记录」，
+    // 写死的话所有浏览器窗口共用一页（串台）；每次刷新页面重新生成本次会话的编号，
+    // 效果就是「刷新 = 开个新对话」，这正是真实聊天产品「新建会话」的雏形。
+    //
+    // 为什么要 Date.now() + Math.random() 两段拼：单靠时间戳会撞车——
+    // 同一毫秒内打开的两个页面（比如你开两个标签页、或多人同时点开）
+    // 编号会一模一样，然后串台。两个独立的不确定性叠乘，碰撞概率降到工程上可忽略。
+    // 阶段 0 的够用方案；标准答案是 UUID（浏览器现成方法 crypto.randomUUID()，
+    // 128 位随机数全球唯一），等 JS 课进度到了换成它
+    var conversationId = 'web-' + Date.now() + '-' + Math.random();
+
     /**
      * 方案 A：流结束后才渲染。流水线：原始文本 → marked → DOMPurify → innerHTML。
      *
@@ -132,7 +144,9 @@
         //    encodeURIComponent：message 是用户随手输入的，可能包含 & # 空格
         //    等对 URL 有特殊含义的字符，不编码的话 URL 结构会被破坏，
         //    编码保证它无论长什么样都被原样当成参数值传过去
-        var es = new EventSource('/api/chat/stream?message=' + encodeURIComponent(message));
+        //    conversationId 是我们自己生成的（数字+固定前缀，无特殊字符），不必编码
+        var es = new EventSource('/api/chat/stream?message=' + encodeURIComponent(message)
+            + '&conversationId=' + conversationId);
         currentEs = es;
 
         // 4. 流式期间禁用按钮，视觉上也告诉用户「正在回答，别急」
@@ -162,7 +176,6 @@
             sendBtn.disabled = false;
             // 流结束，文本已完整，此时才把整段 Markdown 一次性排版替换上去。
             // 加长度判断：回答长度还等于前缀「AI：」说明一个碎片都没收到（接口报错等），
-            // 此时没什么可渲染的，别拿「AI：」去走渲染器
             if (rawAnswer.length > 3) {
                 renderMarkdown(aDiv, rawAnswer.substring(3));
                 chatBox.scrollTop = chatBox.scrollHeight;

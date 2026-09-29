@@ -39,9 +39,14 @@ public class ChatController {
                 .call()
                 .content();
     }
-    @GetMapping(value = "/stream",produces = MediaType.TEXT_EVENT_STREAM_VALUE+";charset=UTF-8")
-    public Flux<String> stream(@RequestParam(defaultValue = "简单介绍一下你自己") String message) {
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE + ";charset=UTF-8")
+    public Flux<String> stream(@RequestParam(defaultValue = "讲讲 Spring Boot 自动配置原理") String message,
+                               @RequestParam(defaultValue = "default") String conversationId) {
         return chatClient.prompt()
+                // 接记忆：与 /simple 完全相同的三行（本子递给拦截者 + 报上页码）
+                .advisors(MessageChatMemoryAdvisor.builder(chatMemory)
+                        .conversationId(conversationId)
+                        .build())
                 .user(message)
                 .stream()
                 .content()
