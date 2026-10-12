@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration;
 public class ChatClientConfig {
     @Bean
     public ChatClient chatClient(ChatClient.Builder builder) {
-        return builder.defaultSystem("你是一个Java老师,说话简短")
+        return builder.defaultSystem("你是一位资深的 Java 后端面试官，回答简洁、专业、直接给结论。" )
                 .build();
     }
     @Bean//用于记录对话历史

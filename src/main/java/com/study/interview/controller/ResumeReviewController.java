@@ -10,7 +10,7 @@ import java.awt.*;
 
 @RestController
 public class ResumeReviewController {
-    ChatClient chatClient;
+    private final ChatClient chatClient;
     public ResumeReviewController(ChatClient chatClient) {
         this.chatClient = chatClient;
     }

@@ -1,49 +1,76 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>org.example</groupId>
-    <artifactId>myai-interview</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>myai-interview</name>
-    <description>myai-interview</description>
+
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.5.0</version>
         <relativePath/>
     </parent>
+
+    <groupId>com.study</groupId>
+    <artifactId>ai-interview</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>ai-interview</name>
+    <description>Spring AI 智能面试助手 - 阶段0 骨架</description>
+
     <properties>
         <java.version>17</java.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <spring-boot.version>3.5.0</spring-boot.version>
         <spring-ai.version>1.1.0</spring-ai.version>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
     </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-        </dependency>
+
+        <!--
+          接 DeepSeek：DeepSeek 兼容 OpenAI 协议，所以直接用 OpenAI 的 starter，
+          再把 base-url 改成 DeepSeek 的地址即可，不需要单独的 starter。
+        -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
-            <version>${spring-ai.version}</version>
+        </dependency>
+
+        <!--
+          MyBatis-Plus（Spring Boot 3 专用版）：
+          - 必须用 spring-boot3 后缀（jakarta 命名空间），用 Boot2 版会在启动时报 javax.* 类找不到
+          - 已内置 mybatis + mybatis-spring + spring-boot-starter-jdbc（含 HikariCP 连接池），
+            所以不需要再单独引 jdbc / 连接池依赖
+          - 版本交给下面的 mybatis-plus-bom 统一管，这里不写
+        -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+
+        <!--
+          MySQL 驱动：
+          - scope=runtime：编译期代码不直接引用驱动类，运行时类路径上有即可
+          - 版本由 Spring Boot 父 POM 统一管理，不写死
+        -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
+
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
+            <!-- Spring AI 的模块很多，必须用 BOM 统一管版本，不要手写一个个写版本号 -->
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
@@ -51,8 +78,32 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!--
+              MyBatis-Plus 的 BOM：统一管理 mybatis-plus-* 系列版本。
+              以后加分页插件（mybatis-plus-jsqlparser）时也从这里取版本，不会出现核心与插件版本对不上。
+            -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-bom</artifactId>
+                <version>${mybatis-plus.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <repositories>
+        <!-- 兜底仓库：1.1.x 的部分构件托管在这里，加上不会出错 -->
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
     <build>
         <plugins>
@@ -62,14 +113,4 @@
             </plugin>
         </plugins>
     </build>
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
-
 </project>
