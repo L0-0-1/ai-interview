@@ -50,6 +50,11 @@
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+        </dependency>
+
         <!--
           MySQL 驱动：
           - scope=runtime：编译期代码不直接引用驱动类，运行时类路径上有即可
