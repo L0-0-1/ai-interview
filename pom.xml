@@ -14,7 +14,7 @@
     <groupId>com.study</groupId>
     <artifactId>myai-interview</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>ai-interview</name>
+    <name>myai-interview</name>
     <description>Spring AI 智能面试助手 - 阶段0 骨架</description>
 
     <properties>

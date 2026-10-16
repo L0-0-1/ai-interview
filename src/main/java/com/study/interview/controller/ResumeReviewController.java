@@ -5,9 +5,10 @@ import com.study.interview.model.Resume;
 import com.study.interview.model.ResumeReview;
 import com.study.interview.model.ResumeText;
 import com.study.interview.service.ResumeReviewService;
-import org.springframework.web.bind.annotation.*;
-
-import java.awt.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/resume")
