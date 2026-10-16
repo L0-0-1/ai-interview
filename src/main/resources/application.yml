@@ -18,3 +18,8 @@ spring:
         options:
           model: deepseek-flash
           temperature: 0.7
+  #数据库连接
+  datasource:
+    url: jdbc:mysql://localhost:3306/your_database_name?useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: ${DB_PASSWORD}

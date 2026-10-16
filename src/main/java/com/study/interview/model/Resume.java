@@ -40,6 +40,8 @@ public class Resume {
     private String summary;
 
     private Integer score;
+    /** 将AI返回的结果存进该JSON字符串中，后续可以直接通过反序列化将该字符串转化成ResumeReview对象 */
+    private String reviewJson;
 
     /**
      * 创建时间 → 列 create_time。
@@ -88,6 +90,14 @@ public class Resume {
 
     public void setScore(Integer score) {
         this.score = score;
+    }
+
+    public void setReviewJson(String reviewJson) {
+        this.reviewJson = reviewJson;
+    }
+
+    public String getReviewJson() {
+        return reviewJson;
     }
 
     public LocalDateTime getCreateTime() {
