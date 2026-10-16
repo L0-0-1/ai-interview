@@ -5,8 +5,6 @@ import com.study.interview.model.Resume;
 import com.study.interview.model.ResumeReview;
 import com.study.interview.model.ResumeText;
 import com.study.interview.service.ResumeReviewService;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 import java.awt.*;

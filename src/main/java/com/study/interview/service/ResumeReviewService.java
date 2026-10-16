@@ -2,7 +2,6 @@ package com.study.interview.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.study.interview.exception.BizException;
-import com.study.interview.mapper.ResumeMapper;
 import com.study.interview.model.Resume;
 import com.study.interview.model.ResumeReview;
 import org.springframework.ai.chat.client.ChatClient;
