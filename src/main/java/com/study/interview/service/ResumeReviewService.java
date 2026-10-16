@@ -20,7 +20,7 @@ public class ResumeReviewService {
     }
     //根据简历内容给出结构化的评审意见
     public ResumeReview review(String resumeText) {
-        if(resumeText==null){
+        if(resumeText==null||resumeText.isBlank()){
             throw new BizException(1001,"简历内容为空");
         }
         return chatClient.prompt()
@@ -31,10 +31,14 @@ public class ResumeReviewService {
                 .entity(ResumeReview.class);
     }
     //评审并保存简历
-    public Resume ReviewAndSave(String resumeText){
+    public Resume reviewAndSave(String resumeText){
         ResumeReview aiReview=review(resumeText);
         Resume resume=new Resume();
-        resume.setName(aiReview.name());
+        String name=aiReview.name();
+        if(name==null||name.trim().isEmpty()){
+            name="未知";
+        }
+        resume.setName(name);
         resume.setScore(aiReview.score());
         resume.setSummary(aiReview.summary());
         //简历内容直接用传入的参数，防止ai复述后产生偏差
@@ -45,9 +49,7 @@ public class ResumeReviewService {
             throw new BizException(1003,"简历评审失败");
         }
         //由于插入是原子操作，不需要用事务
-        if(!resumeService.save(resume)){
-            throw new BizException(1003,"简历落库失败，影响行数不是1");
-        };
+        resumeService.save(resume);
         return resume;
     }
 }

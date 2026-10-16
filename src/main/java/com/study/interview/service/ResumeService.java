@@ -31,12 +31,11 @@ public class ResumeService {
         return resumeMapper.selectPage(pageParam, wrapper);
     }
     //保存插入简历
-    public Boolean save(Resume resume){
+    public void save(Resume resume){
         int row= resumeMapper.insert(resume);
         if(row==0){
             throw new BizException(1002,"简历保存失败");
         }
-        return row==1;
     }
     //根据Id更新简历分数
     public void updateScore(Long id, Integer score){
