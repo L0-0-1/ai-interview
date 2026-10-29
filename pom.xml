@@ -56,6 +56,27 @@
         </dependency>
 
         <!--
+          RAG 向量库（阶段 2）：
+          - spring-ai-vector-store：向量库的抽象接口（VectorStore、SearchRequest、Document）
+          - spring-ai-starter-vector-store-redis：Redis 向量库的实现（RedisVectorStore）
+          - spring-boot-starter-data-redis：Redis 客户端（Jedis），向量库自动配置点名要 Jedis
+          三个缺一不可：缺接口编译不过，缺实现启动时找不到 VectorStore 的 Bean，缺 data-redis 时自动配置被跳过。
+          版本都由上面的 spring-ai-bom 和 spring-boot 父 POM 统一管，这里不写。
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-vector-store</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!--
           MySQL 驱动：
           - scope=runtime：编译期代码不直接引用驱动类，运行时类路径上有即可
           - 版本由 Spring Boot 父 POM 统一管理，不写死

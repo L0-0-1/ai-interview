@@ -1,34 +1,91 @@
-# 应用服务 WEB 访问端口
+##  ============================================================
+##   两份模型供应商配置，改 spring.profiles.active 一行就能整体切换
+##     deepseek = DeepSeek 官方（只有 chat，没有 embedding，做不了 RAG）
+##     bailian  = 阿里云百炼（OpenAI 兼容端点，chat + embedding 都有，RAG 用它）
+##   切换时不需要动任何 Java 代码 —— 这就是 Spring AI 抽象层的价值
+##  ============================================================
 server:
   port: 8080
   servlet:
     encoding:
       charset: UTF-8
-      enabled: true
       force: true
 
-
-# In application.yml
 spring:
+  application:
+    name: myai-interview
+  # 默认走 bailian（RAG 需要 embedding，只有百炼有；deepseek 官方无 embedding 接口）
+  profiles:
+    active: bailian
+
+  ## ---------- 本地 MySQL 数据源（阶段1：MyBatis-Plus）----------
+  ## 先执行 sql/init.sql 建库建表，再启动应用
+  datasource:
+    url: jdbc:mysql://localhost:3306/ai_interview?useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    # 走环境变量，不写死（配置文件要提交到 Git）
+    password: ${DB_PASSWORD}
+
+  ## ---------- Redis（阶段2：向量库）----------
+  ## client-type 必须显式指定 jedis：Spring Boot 默认先创建 Lettuce 连接，
+  ## 而 Spring AI 向量库自动配置点名要 Jedis 版连接，缺了它自动配置会被跳过，
+  ## 启动时报「找不到 RedisVectorStore Bean」
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      client-type: jedis
+  ai:
+    vectorstore:
+      redis:
+        # Redis 里的向量检索需要预先建好索引（类似 MySQL 的索引）才能查询，
+        initialize-schema: true
+
+## ---------- MyBatis-Plus（阶段1）----------
+mybatis-plus:
+  configuration:
+    # 把 Plus 生成并执行的真实 SQL 打到控制台——治「SQL 隐身」；学习期开，生产环境要去掉
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+logging:
+  level:
+    # 打开后能看到 Spring AI 实际发出的请求和收到的响应，排错时非常有用
+    org.springframework.ai: DEBUG
+
+---
+## ---------- 方案 A：DeepSeek 官方 ----------
+spring:
+  config:
+    activate:
+      on-profile: deepseek
   ai:
     openai:
+      # DeepSeek 兼容 OpenAI 协议，所以直接用 OpenAI 的 starter，只改 base-url
       base-url: https://api.deepseek.com
+      # Key 走环境变量
       api-key: ${DEEPSEEK_API_KEY}
       chat:
         options:
           model: deepseek-flash
           temperature: 0.7
-  #数据库连接
-  datasource:
-    url: jdbc:mysql://localhost:3306/ai_interview?useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    password: ${DB_PASSWORD}
+      # 注意：DeepSeek 官方没有 embedding 接口，所以这个 profile 做不了 RAG 检索，
+      # 只能做对话/评审。要做 RAG 请切到 bailian。
 
-  #MyBatis打开SQL在日志的输出
-mybatis-plus:
-  configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-#打开可以在日志看Spring AI发的prompt和收到的JSON
-logging:
-  level:
-    org.springframework.ai: DEBUG
+---
+## ---------- 方案 B：阿里云百炼（RAG 用它）----------
+spring:
+  config:
+    activate:
+      on-profile: bailian
+  ai:
+    openai:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${DASHSCOPE_API_KEY}
+      embedding:
+        options:
+          # RAG 里把「文本 → 向量」用的 embedding 模型
+          model: text-embedding-v4
+      chat:
+        options:
+          model: deepseek-v4-flash-0731
+          temperature: 0.7
