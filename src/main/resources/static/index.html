@@ -99,6 +99,12 @@
             color: var(--error);
         }
 
+        /* 系统提示（对话流内联弱提示，如限流）：样子像 assistant 气泡但颜色更弱，不是错误、不用红框 */
+        .bubble.notice {
+            background: var(--bubble-ai);
+            color: var(--muted);
+        }
+
         /* marked 渲染出的代码块/行内代码样式 */
         .bubble pre {
             background: var(--code-bg);
@@ -176,10 +182,9 @@
         <div class="input-bar">
             <input v-model="question"
                    @keydown.enter="onEnter"
-                   placeholder="输入 Java 面试题，如：公平锁和可重入锁的区别"
-                   :disabled="loading">
+                   placeholder="输入 Java 面试题，如：公平锁和可重入锁的区别">
             <button @click="send" :disabled="loading">
-                {{ loading ? '思考中…' : '发送' }}
+                {{ buttonText }}
             </button>
         </div>
     </div>
@@ -202,6 +207,10 @@
             // JS 里读写要 .value，模板里 Vue 自动解包、不用写
             const question = ref('');   // 输入框内容
             const loading = ref(false); // 等待回答中（按钮变灰、禁重复发送）
+            // 按钮文案是独立状态，不直接绑 loading：
+            // 等待期间输入框仍可打字、只有按钮禁用；若文案直接绑 loading，
+            // 将来加「其他禁用原因」或做流式时，文案和加载状态会纠缠不清
+            const buttonText = ref('发送');
             const messages = ref([
                 // 欢迎消息；**加粗** 顺便演示 Markdown 渲染
                 { role: 'assistant', html: renderMarkdown('你好，我是 AI 面试助手。输入一个 Java 面试题试试，比如：**公平锁和可重入锁有什么区别？**') }
@@ -211,6 +220,10 @@
             function renderMarkdown(rawText) {
                 return DOMPurify.sanitize(marked.parse(rawText));
             }
+
+            // 限流提示的固定文案：后端的 message 里带着实现参数（配额数字），
+            // 原样展示既不好看、也像把内部机制暴露给用户——主流 AI 应用都用一句固定友好话术
+            const RATE_LIMIT_NOTICE_TEXT = '提问有点频繁，稍微休息一下再试吧';
 
             async function send() {
                 const text = question.value.trim();
@@ -222,6 +235,7 @@
                 messages.value.push({ role: 'user', text });
                 question.value = '';
                 loading.value = true;
+                buttonText.value = '思考中…';
 
                 try {
                     // 相对路径：页面和后端同源（同一个 Spring Boot 托管），无跨域问题
@@ -231,10 +245,16 @@
                         body: JSON.stringify({ question: text })
                     });
                     const result = await response.json();
+                    // Result.success() 的 code 是 0（非 0 即失败，业务码与 HTTP 状态码分家）
                     if (result.code === 0) {
                         messages.value.push({ role: 'assistant', html: renderMarkdown(result.data) });
+                    } else if (result.code === 429) {
+                        // 限流：429 是后端 RateLimitException 的专用错误码（与 HTTP 状态码 429 同值）。
+                        // 不展示后端 message——它带着实现参数，暴露给用户像把内部机制漏出来；
+                        // 换固定友好文案，走 notice 弱提示样式（不是 error 红框）
+                        messages.value.push({ role: 'notice', html: renderMarkdown(RATE_LIMIT_NOTICE_TEXT) });
                     } else {
-                        // 业务失败（后端异常）：展示信封里的 message
+                        // 其余业务失败：展示信封里的 message
                         messages.value.push({ role: 'assistant', html: renderMarkdown(result.message), error: true });
                     }
                 } catch {
@@ -242,6 +262,7 @@
                     messages.value.push({ role: 'assistant', html: '请求失败：请确认后端已启动（http://localhost:8080）', error: true });
                 } finally {
                     loading.value = false;
+                    buttonText.value = '发送';
                     // 等 Vue 把新气泡画到页面上之后再滚到底（DOM 更新是异步排队的）
                     nextTick(scrollToBottom);
                 }
@@ -260,7 +281,7 @@
                 box.scrollTop = box.scrollHeight;
             }
 
-            return { question, loading, messages, send, onEnter };
+            return { question, loading, buttonText, messages, send, onEnter };
         }
     }).mount('#app');
 </script>

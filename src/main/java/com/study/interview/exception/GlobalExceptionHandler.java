@@ -2,6 +2,7 @@ package com.study.interview.exception;
 
 import com.study.interview.common.Result;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -15,9 +16,23 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     @ExceptionHandler(BizException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Result<Void> handleBizException(BizException e) {
-        return Result.error(e.getCode(), e.getMessage());
+    public ResponseEntity<Result<Void>> handleBizException(BizException e) {
+        // HTTP 状态码跟着异常里声明的走（1001 参数问题→400、1002 资源不存在→404、20xx 服务端故障→500），
+        // 不再一刀切 400：状态码语义由抛出点决定，处理器只负责包信封
+        return ResponseEntity.status(e.getStatus()).body(Result.error(e.getCode(), e.getMessage()));
+    }
+
+    /**
+     * 接限流异常：来源调用太频繁，被 Redis 计数器拦下。
+     * HTTP 429 Too Many Requests 是标准里给「频率超限」的专用状态码——
+     * 与 400/404/405/415 同族：都是「请求方的问题」，只是这次问题不是格式而是频率。
+     * 拦在【进方法之前】（拦截器阶段），业务代码根本没执行——不单独接住就会掉进兜底被误报成 500。
+     */
+    @ExceptionHandler(RateLimitException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public Result<Void> handleRateLimit(RateLimitException e) {
+        // e.getMessage() 是我们自己写的人话（含配额提示），原样回给请求方
+        return Result.error(429, e.getMessage());
     }
 
     /**

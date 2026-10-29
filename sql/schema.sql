@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS `Resume`
     `resume_text` LONGTEXT     DEFAULT NULL COMMENT '简历原文（存用户传入的原始文本，非模型复述版本）',
     `summary`     VARCHAR(512) DEFAULT NULL COMMENT 'AI 一句话总评',
     `score`       INT          DEFAULT NULL COMMENT '综合评分 0-100',
+    -- 三个维度分拆独立列：分数将来要进 WHERE / ORDER BY（按技术分排序、筛低于 60 分的），
+    -- 与实体 Resume 的 techScore/projectScore/expressionScore 一一对应，缺了落库必报 Unknown column
+    `tech_score`       INT      DEFAULT NULL COMMENT '技术能力评分 0-100',
+    `project_score`    INT      DEFAULT NULL COMMENT '项目经验评分 0-100',
+    `expression_score` INT      DEFAULT NULL COMMENT '表达与逻辑评分 0-100',
     `review_json` LONGTEXT     DEFAULT NULL COMMENT '结构化评审结果的 JSON 全量，可反序列化回 ResumeReview',
     `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间，由数据库时钟生成',
     PRIMARY KEY (`id`),

@@ -1,6 +1,7 @@
 package com.study.interview.controller;
 
 import com.study.interview.common.Result;
+import com.study.interview.config.RateLimit;
 import com.study.interview.model.Resume;
 import com.study.interview.model.ResumeReview;
 import com.study.interview.model.ResumeText;
@@ -18,12 +19,15 @@ public class ResumeReviewController {
         this.resumeReviewService = resumeReviewService;
     }
     // 评审简历，只评审不落库
+    // 简历全文进模型、成本高，配额收紧到 60 秒 3 次
+    @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping("/review")
     public Result<ResumeReview> review(@RequestBody ResumeText resumeText) {
         ResumeReview resumeReview = resumeReviewService.review(resumeText.getText());
         return Result.success(resumeReview);
     }
-    // 评审简历并保存
+    // 评审简历并保存（同样调 AI，配额一致）
+    @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping("/save")
     public Result<Resume> reviewAndSave(@RequestBody ResumeText resumeText) {
         Resume resume = resumeReviewService.reviewAndSave(resumeText.getText());

@@ -12,9 +12,9 @@ public class Result<T> {
         this.message = message;
         this.data = data;
     }
-    //成功时状态码为200
+    //成功时状态码为0（非0即失败，与HTTP状态码分家）
     public static <T> Result<T> success(T data) {
-        return new Result<>(200, "success", data);
+        return new Result<>(0, "success", data);
     }
     public static <T> Result<T> error(int code, String message) {
         return new Result<>(code, message, null);

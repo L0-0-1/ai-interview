@@ -19,7 +19,7 @@ spring:
     active: bailian
 
   ## ---------- 本地 MySQL 数据源（阶段1：MyBatis-Plus）----------
-  ## 先执行 sql/init.sql 建库建表，再启动应用
+  ## 先执行 sql/schema.sql 建库建表，再启动应用
   datasource:
     url: jdbc:mysql://localhost:3306/ai_interview?useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
     username: root

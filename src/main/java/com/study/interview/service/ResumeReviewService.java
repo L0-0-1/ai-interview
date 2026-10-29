@@ -109,8 +109,9 @@ public class ResumeReviewService {
 
         // 第二步：组装数据库行（Resume 实体 = Resume 表的一行）
         Resume resume = new Resume();
-        // 姓名兜底：表列 name 是 NOT NULL，而 AI 输出天生不可靠（Schema 只是"说明书"，
-        // 不保证模型真按"没提及就填未知"执行）——防它返回 null 撞 NOT NULL 报错
+        // 姓名兜底：AI 输出天生不可靠（Schema 只是"说明书"，
+        // 不保证模型真按"没提及就填未知"执行）——防它返回 null 落库成 NULL 姓名
+        // （schema.sql 里 name 列允许 NULL，兜底是数据质量约定，NULL 参与不了后续按姓名筛选）
         String name = aiReview.name();
         if (name == null || name.trim().isEmpty()) {
             name = "未知";
@@ -140,10 +141,10 @@ public class ResumeReviewService {
             throw new IllegalStateException("评审详情序列化失败", e);
         }
 
-        // 第四步：落库。单条 INSERT 自身原子；save() 把"影响行数是否为 1"作为业务语义返回
-        if (!resumeService.save(resume)) {
-            throw new IllegalStateException("评审结果落库失败：影响行数不是 1");
-        }
+        // 第四步：落库。单条 INSERT 自身原子。
+        // myai 的 ResumeService.save() 返回 void：失败时它自己会抛 BizException(2001)，这里不用再判返回值——
+        // 「void = 要么正常结束、要么抛异常」的签名，本来就不该给调用方留"失败怎么办"的假分支。
+        resumeService.save(resume);
         // 返回落库后的实体：id 已被主键回写（getGeneratedKeys 机制）；
         // create_time 不会回写（它是库端默认值、不是主键）——想要真实时间得回库里查
         return resume;
