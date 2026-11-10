@@ -19,9 +19,11 @@ public class ResumeController {
         this.resumeService = resumeService;
     }
     //分页查询简历历史
+    // minScore 可选：不传 = 不按分数筛选；传了 = score >= minScore
     @GetMapping("/history")
-    public Result<Page<Resume>> getResumeHistory(@RequestParam int page, @RequestParam int size) {
-        return Result.success(resumeService.page(page, size));
+    public Result<Page<Resume>> getResumeHistory(@RequestParam int page, @RequestParam int size,
+                                                 @RequestParam(required = false) Integer minScore) {
+        return Result.success(resumeService.page(page, size, minScore));
     }
     //按id查询简历
     @GetMapping("/{id}")

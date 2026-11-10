@@ -25,16 +25,28 @@ public class ResumeService {
         return resume;
     }
     //简历分页查询
-    public Page<Resume> page(int current, int size){
+    public Page<Resume> page(int current, int size, Integer minScore){
         // 参数闸（校验属于业务，放 Service 不放 Controller，与评审接口 isBlank 校验同款边界）：
         // 负数/0/超大 size 传进去，MyBatis-Plus 会在 SQL 层报错，最后被兜底吞成 500"服务器内部错误"——
         // 明明是请求方填错，却报成服务器故障。这里先拦成 1001 参数问题（400）
         if (current < 1 || size < 1 || size > 100) {
             throw new BizException(1001, "分页参数不合法：page 从 1 起，size 在 1-100 之间");
         }
+        // minScore 是可选筛选项，两步都只在"传了"时生效：
+        //   校验：null = 没传，不参与范围判断；
+        //   加条件：null 不挂 WHERE，查询等于"不按分数筛选"。
+        // 为什么 null 不能默认成 0 然后无条件筛选：
+        //   score 列允许 NULL（没评分的简历），SQL 里 NULL 和任何数比大小结果都是"不确定"，
+        //   WHERE score >= 0 选不中 NULL 行——"没传 minScore 应查全部"时，未评分简历会凭空消失
+        if (minScore != null && (minScore < 0 || minScore > 100)) {
+            throw new BizException(1001, "minScore 不合法：必须在 0-100 之间");
+        }
         Page<Resume> pageParam = new Page<>(current, size);
         //通过分页器实现分页查询
         LambdaQueryWrapper<Resume> wrapper=new LambdaQueryWrapper<>();
+        if (minScore != null) {
+            wrapper.ge(Resume::getScore, minScore);
+        }
         wrapper.orderByDesc(Resume::getScore);
         wrapper.orderByDesc(Resume::getId);
         return resumeMapper.selectPage(pageParam, wrapper);
