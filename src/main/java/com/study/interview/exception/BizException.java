@@ -7,8 +7,10 @@ import org.springframework.http.HttpStatus;
 //   2. 不用每一层都 throw，自动冒泡直到全局异常处理器接住。
 //
 // 业务码约定（分段管理，码表集中在这里，别处只引用）：
-//   10xx = 请求方的问题（HTTP 4xx）：1001 参数问题；1002 资源不存在
-//   20xx = 服务端的问题（HTTP 5xx）：2001 保存失败（2002/2003 预留给更新/删除失败场景）
+//   10xx = 请求方的问题（HTTP 4xx）：1001 参数问题；1002 资源不存在；
+//          1003 状态冲突（409，如轮次已提交/轮次超前/会话已结束）
+//   20xx = 服务端的问题（HTTP 5xx）：2001 保存失败（2002/2003 预留给更新/删除失败场景）；
+//          2004 模型输出无效或当前轮次题目缺失
 public class BizException extends RuntimeException {
     //添加异常码，方便统一处理
     private final int code;

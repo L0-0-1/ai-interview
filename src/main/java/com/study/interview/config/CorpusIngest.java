@@ -29,7 +29,7 @@ import java.util.List;
  *    所以再跑之前先在 redis-cli 里执行 FLUSHDB 清空本地向量库（学习库随便清）。
  *    生产环境不会用 CommandLineRunner 干这事，而是单独的入库任务 + 幂等去重。
  */
-@Component
+//@Component
 public class CorpusIngest implements CommandLineRunner {
 
     private final VectorStore vectorStore;
