@@ -1,290 +1,59 @@
 <!DOCTYPE html>
-<!-- 页面本身的编码声明：浏览器靠这行决定用什么编码读这个文件里的中文 -->
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 面试助手</title>
-    <style>
-        /* 全部颜色定义成 CSS 变量，深浅色切换只改这一张变量表 */
-        :root {
-            --page-bg: #f3f5f9;
-            --card-bg: #ffffff;
-            --text: #2b2f36;
-            --muted: #8a919e;
-            --bubble-me: #3d7bff;
-            --bubble-ai: #eef1f6;
-            --border: #e2e6ee;
-            --code-bg: #f5f6f8;
-            --error: #e5484d;
-        }
-
-        /* 系统切深色时浏览器自动应用这套深色变量——深浅适配零 JS */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --page-bg: #16181d;
-                --card-bg: #1e2128;
-                --text: #e6e8ec;
-                --muted: #7d8593;
-                --bubble-me: #3d7bff;
-                --bubble-ai: #2a2e37;
-                --border: #323741;
-                --code-bg: #262a33;
-                --error: #ff6b70;
-            }
-        }
-
-        /* v-cloak：Vue 接管前把整个 app 藏起来，防止 {{ }} 模板语法被浏览器当普通文字闪一下。
-           Vue 挂载完成后会自动摘掉这个属性，页面才显示 */
-        [v-cloak] { display: none; }
-
-        * { box-sizing: border-box; }
-
-        body {
-            margin: 0;
-            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-            background: var(--page-bg);
-            color: var(--text);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .card {
-            width: 860px;
-            max-width: 96vw;
-            height: 90vh;
-            background: var(--card-bg);
-            border-radius: 14px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, .08);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .header {
-            padding: 18px 24px;
-            border-bottom: 1px solid var(--border);
-        }
-        .header h1 { margin: 0; font-size: 20px; }
-        .header p  { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
-
-        .chat-box {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 24px;
-        }
-
-        .bubble {
-            max-width: 78%;
-            padding: 10px 14px;
-            border-radius: 12px;
-            margin-bottom: 12px;
-            line-height: 1.6;
-            word-break: break-word;
-        }
-        .bubble.user {
-            background: var(--bubble-me);
-            color: #fff;
-            margin-left: auto;
-            border-bottom-right-radius: 4px;
-        }
-        .bubble.assistant {
-            background: var(--bubble-ai);
-            border-bottom-left-radius: 4px;
-        }
-        .bubble.error {
-            border: 1px solid var(--error);
-            color: var(--error);
-        }
-
-        /* 系统提示（对话流内联弱提示，如限流）：样子像 assistant 气泡但颜色更弱，不是错误、不用红框 */
-        .bubble.notice {
-            background: var(--bubble-ai);
-            color: var(--muted);
-        }
-
-        /* marked 渲染出的代码块/行内代码样式 */
-        .bubble pre {
-            background: var(--code-bg);
-            padding: 10px;
-            border-radius: 8px;
-            overflow-x: auto;
-            font-family: Consolas, Monaco, monospace;
-            font-size: 13px;
-        }
-        .bubble code {
-            background: var(--code-bg);
-            padding: 1px 5px;
-            border-radius: 4px;
-            font-family: Consolas, Monaco, monospace;
-        }
-        .bubble pre code { background: none; padding: 0; }
-
-        .thinking { color: var(--muted); }
-
-        .input-bar {
-            display: flex;
-            gap: 10px;
-            padding: 14px 16px;
-            border-top: 1px solid var(--border);
-        }
-        .input-bar input {
-            flex: 1;
-            padding: 10px 14px;
-            font-size: 14px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: var(--card-bg);
-            color: var(--text);
-            outline: none;
-        }
-        .input-bar input:focus { border-color: var(--bubble-me); }
-        .input-bar button {
-            padding: 10px 22px;
-            font-size: 14px;
-            border: none;
-            border-radius: 8px;
-            background: var(--bubble-me);
-            color: #fff;
-            cursor: pointer;
-        }
-        .input-bar button:disabled {
-            background: var(--muted);
-            cursor: not-allowed;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>面试练习室</title>
+    <link rel="stylesheet" href="/workspace.css">
 </head>
 <body>
-
-<!-- Vue 只接管 id="app" 这个 div。v-cloak 配合上面的 CSS：挂载前隐身，挂载后显示 -->
-<div id="app" v-cloak>
-    <div class="card">
-        <div class="header">
-            <h1>AI 面试助手</h1>
-            <p>基于 RAG 知识库作答：先检索八股资料，再让大模型照着资料回答</p>
-        </div>
-
-        <!-- 消息列表：一条消息一个气泡，靠左/靠右、错误红框都由 msg 的属性决定 -->
-        <div class="chat-box" id="chatBox">
-            <div v-for="(msg, index) in messages"
-                 :key="index"
-                 :class="['bubble', msg.role, msg.error ? 'error' : '']">
-                <!-- {{ }} 插值自动转义文本，天然防 XSS -->
-                <div v-if="msg.role === 'user'">{{ msg.text }}</div>
-                <!-- v-html 不设防，所以 msg.html 必须是 marked 翻译 + DOMPurify 消毒后的产物 -->
-                <div v-else v-html="msg.html"></div>
-            </div>
-            <div v-if="loading" class="bubble assistant thinking">思考中…</div>
-        </div>
-
-        <div class="input-bar">
-            <input v-model="question"
-                   @keydown.enter="onEnter"
-                   placeholder="输入 Java 面试题，如：公平锁和可重入锁的区别">
-            <button @click="send" :disabled="loading">
-                {{ buttonText }}
-            </button>
-        </div>
+<header class="site-header">
+    <div class="site-nav page-width">
+        <a class="brand" href="/">面试练习室</a>
+        <nav aria-label="主导航">
+            <a href="/interview.html">模拟面试</a>
+            <a href="/qa.html">题库问答</a>
+        </nav>
     </div>
-</div>
+</header>
 
-<!-- Vue 3：框架本体，CDN 全局引入，零构建 -->
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-<!-- marked：Markdown → HTML 渲染器。大模型的回答是 Markdown，手写解析器必然漏洞百出 -->
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
-<!-- DOMPurify：HTML 消毒器，防 XSS——marked 只翻译不安检，输出必须过它 -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<main class="page-width home">
+    <section class="home-intro" aria-labelledby="home-title">
+        <div class="hero-copy">
+            <h1 id="home-title">把项目经历<br>讲给面试官听。</h1>
+            <p>贴上简历，选一个想投的岗位。面试官会从你的经历出发，顺着回答往下问。</p>
+            <a class="button button-primary" href="/interview.html">开始模拟面试 <span aria-hidden="true">→</span></a>
+        </div>
 
-<script>
-    const { createApp, ref, nextTick } = Vue;
+        <section class="preview" aria-labelledby="preview-title">
+            <div class="preview-header">
+                <h2 id="preview-title">对话示例</h2>
+                <span>Java 后端实习</span>
+            </div>
+            <div class="preview-dialogue">
+                <div class="message message-interviewer">
+                    <span class="message-speaker">面试官</span>
+                    <p class="message-text">你提到项目里做了分页。同分的简历有好几条时，你怎么保证翻页的顺序稳定？</p>
+                </div>
+                <div class="message message-candidate">
+                    <span class="message-speaker">你</span>
+                    <p class="message-text">我在分数后面加了 ID 降序。同分时就按 ID 排。</p>
+                </div>
+                <div class="message message-interviewer">
+                    <span class="message-speaker">面试官</span>
+                    <p class="message-text">那如果用户翻到第二页之前，有一条新简历插到了第一页呢？</p>
+                </div>
+            </div>
+        </section>
+    </section>
 
-    createApp({
-        setup() {
-            // 页面状态。为什么必须用 ref 包：普通变量改了没人知道；
-            // ref 包过的值被代理盯着，改 .value 时依赖它的模板自动重画。
-            // JS 里读写要 .value，模板里 Vue 自动解包、不用写
-            const question = ref('');   // 输入框内容
-            const loading = ref(false); // 等待回答中（按钮变灰、禁重复发送）
-            // 按钮文案是独立状态，不直接绑 loading：
-            // 等待期间输入框仍可打字、只有按钮禁用；若文案直接绑 loading，
-            // 将来加「其他禁用原因」或做流式时，文案和加载状态会纠缠不清
-            const buttonText = ref('发送');
-            const messages = ref([
-                // 欢迎消息；**加粗** 顺便演示 Markdown 渲染
-                { role: 'assistant', html: renderMarkdown('你好，我是 AI 面试助手。输入一个 Java 面试题试试，比如：**公平锁和可重入锁有什么区别？**') }
-            ]);
-
-            // Markdown 渲染 + 消毒：marked 翻译，DOMPurify 过滤危险标签（防 XSS）
-            function renderMarkdown(rawText) {
-                return DOMPurify.sanitize(marked.parse(rawText));
-            }
-
-            // 限流提示的固定文案：后端的 message 里带着实现参数（配额数字），
-            // 原样展示既不好看、也像把内部机制暴露给用户——主流 AI 应用都用一句固定友好话术
-            const RATE_LIMIT_NOTICE_TEXT = '提问有点频繁，稍微休息一下再试吧';
-
-            async function send() {
-                const text = question.value.trim();
-                if (text === '' || loading.value) {
-                    return;
-                }
-
-                // 先画用户气泡再发请求，用户立即有反馈
-                messages.value.push({ role: 'user', text });
-                question.value = '';
-                loading.value = true;
-                buttonText.value = '思考中…';
-
-                try {
-                    // 相对路径：页面和后端同源（同一个 Spring Boot 托管），无跨域问题
-                    const response = await fetch('/ask/question', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }, // 告诉后端请求体是 JSON，后端才会按 JSON 解析
-                        body: JSON.stringify({ question: text })
-                    });
-                    const result = await response.json();
-                    // Result.success() 的 code 是 0（非 0 即失败，业务码与 HTTP 状态码分家）
-                    if (result.code === 0) {
-                        messages.value.push({ role: 'assistant', html: renderMarkdown(result.data) });
-                    } else if (result.code === 429) {
-                        // 限流：429 是后端 RateLimitException 的专用错误码（与 HTTP 状态码 429 同值）。
-                        // 不展示后端 message——它带着实现参数，暴露给用户像把内部机制漏出来；
-                        // 换固定友好文案，走 notice 弱提示样式（不是 error 红框）
-                        messages.value.push({ role: 'notice', html: renderMarkdown(RATE_LIMIT_NOTICE_TEXT) });
-                    } else {
-                        // 其余业务失败：展示信封里的 message
-                        messages.value.push({ role: 'assistant', html: renderMarkdown(result.message), error: true });
-                    }
-                } catch {
-                    // 网络层失败：连信封都没有，只能给通用提示
-                    messages.value.push({ role: 'assistant', html: '请求失败：请确认后端已启动（http://localhost:8080）', error: true });
-                } finally {
-                    loading.value = false;
-                    buttonText.value = '发送';
-                    // 等 Vue 把新气泡画到页面上之后再滚到底（DOM 更新是异步排队的）
-                    nextTick(scrollToBottom);
-                }
-            }
-
-            function onEnter(event) {
-                // 中文输入法选词也会触发回车事件，isComposing 为 true 时不发送
-                if (event.isComposing) {
-                    return;
-                }
-                send();
-            }
-
-            function scrollToBottom() {
-                const box = document.getElementById('chatBox');
-                box.scrollTop = box.scrollHeight;
-            }
-
-            return { question, loading, buttonText, messages, send, onEnter };
-        }
-    }).mount('#app');
-</script>
-
+    <a class="secondary-entry" href="/qa.html">
+        <div>
+            <h2>题库问答</h2>
+            <p>复习 Java、数据库等面试知识，根据题库资料答疑。</p>
+        </div>
+        <span aria-hidden="true">→</span>
+    </a>
+</main>
 </body>
 </html>

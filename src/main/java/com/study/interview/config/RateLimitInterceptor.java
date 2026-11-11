@@ -1,6 +1,7 @@
 package com.study.interview.config;
 
 import com.study.interview.exception.RateLimitException;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -48,6 +49,10 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // SSE 完成时的异步分派属于同一次请求，不能再次计入限流。
+        if (request.getDispatcherType() == DispatcherType.ASYNC) {
+            return true;
+        }
         // 只有「真 Controller 方法」才查注解：静态资源、默认页的 handler 不是 HandlerMethod，直接放行
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return true;
