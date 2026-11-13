@@ -29,6 +29,16 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
         <!--
           接 DeepSeek：DeepSeek 兼容 OpenAI 协议，所以直接用 OpenAI 的 starter，
           再把 base-url 改成 DeepSeek 的地址即可，不需要单独的 starter。
