@@ -27,42 +27,42 @@ public class InterviewService {
         this.interviewSessionService = interviewSessionService;
     }
 
-    public InterviewStartResponse start(String resumeText, String targetPosition) {
+    public InterviewStartResponse start(Long currentUserId, String resumeText, String targetPosition) {
         validateStart(resumeText, targetPosition);
         String question = firstQuestion(resumeText, targetPosition).call().content();
-        return saveStart(resumeText, targetPosition, question);
+        return saveStart(currentUserId, resumeText, targetPosition, question);
     }
 
-    public Flux<StreamEvent> streamStart(String resumeText, String targetPosition) {
+    public Flux<StreamEvent> streamStart(Long currentUserId, String resumeText, String targetPosition) {
         return Flux.defer(() -> {
             validateStart(resumeText, targetPosition);
             return streamQuestion(firstQuestion(resumeText, targetPosition),
-                    question -> saveStart(resumeText, targetPosition, question));
+                    question -> saveStart(currentUserId, resumeText, targetPosition, question));
         });
     }
 
-    public InterviewAnswerResponse answer(Long sessionId, Integer roundNo, String answerText) {
-        InterviewSession session = validateAnswer(sessionId, roundNo, answerText);
+    public InterviewAnswerResponse answer(Long sessionId, Long currentUserId, Integer roundNo, String answerText) {
+        InterviewSession session = validateAnswer(sessionId, currentUserId, roundNo, answerText);
         if (roundNo.equals(session.getMaxRound())) {
-            return saveLastAnswer(sessionId, roundNo, answerText);
+            return saveLastAnswer(sessionId, currentUserId, roundNo, answerText);
         }
 
         String currentQuestion = interviewSessionService.getCurrentQuestionOrThrow(sessionId, roundNo);
         String question = followUpQuestion(session.getTargetPosition(), currentQuestion, answerText).call().content();
-        return saveNextRound(sessionId, roundNo, answerText, question);
+        return saveNextRound(sessionId, currentUserId, roundNo, answerText, question);
     }
 
-    public Flux<StreamEvent> streamAnswer(Long sessionId, Integer roundNo, String answerText) {
+    public Flux<StreamEvent> streamAnswer(Long sessionId, Long currentUserId, Integer roundNo, String answerText) {
         // 会话查询和末轮写入使用阻塞式 JDBC，放到 boundedElastic 执行。
         return Flux.defer(() -> {
-            InterviewSession session = validateAnswer(sessionId, roundNo, answerText);
+            InterviewSession session = validateAnswer(sessionId, currentUserId, roundNo, answerText);
             if (roundNo.equals(session.getMaxRound())) {
-                return Flux.just(new StreamEvent("done", saveLastAnswer(sessionId, roundNo, answerText)));
+                return Flux.just(new StreamEvent("done", saveLastAnswer(sessionId, currentUserId, roundNo, answerText)));
             }
 
             String currentQuestion = interviewSessionService.getCurrentQuestionOrThrow(sessionId, roundNo);
             return streamQuestion(followUpQuestion(session.getTargetPosition(), currentQuestion, answerText),
-                    question -> saveNextRound(sessionId, roundNo, answerText, question));
+                    question -> saveNextRound(sessionId, currentUserId, roundNo, answerText, question));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -89,7 +89,7 @@ public class InterviewService {
         }
     }
 
-    private InterviewSession validateAnswer(Long sessionId, Integer roundNo, String answerText) {
+    private InterviewSession validateAnswer(Long sessionId, Long currentUserId, Integer roundNo, String answerText) {
         if (sessionId == null || sessionId <= 0) {
             throw new BizException(1001, "会话 id 不合法");
         }
@@ -103,7 +103,7 @@ public class InterviewService {
             throw new BizException(1001, "回答内容过长：最多 2000 字");
         }
 
-        InterviewSession session = interviewSessionService.getSessionOrThrow(sessionId);
+        InterviewSession session = interviewSessionService.getOwnedSessionOrThrow(sessionId, currentUserId);
         if (!InterviewSession.STATUS_ONGOING.equals(session.getStatus())) {
             throw new BizException(1003, HttpStatus.CONFLICT, "面试已结束，无法继续提交回答");
         }
@@ -119,20 +119,21 @@ public class InterviewService {
         return session;
     }
 
-    private InterviewStartResponse saveStart(String resumeText, String targetPosition, String question) {
+    private InterviewStartResponse saveStart(Long currentUserId, String resumeText, String targetPosition, String question) {
         requireQuestion(question, "模型未生成有效面试题，请重试");
-        Long sessionId = interviewSessionService.createSessionAndFirstMessage(resumeText, targetPosition, question);
+        Long sessionId = interviewSessionService.createSessionAndFirstMessage(currentUserId, resumeText, targetPosition, question);
         return new InterviewStartResponse(sessionId, question, 1);
     }
 
-    private InterviewAnswerResponse saveNextRound(Long sessionId, int roundNo, String answerText, String question) {
+    private InterviewAnswerResponse saveNextRound(Long sessionId, Long currentUserId, int roundNo,
+                                                  String answerText, String question) {
         requireQuestion(question, "模型未生成有效的下一题，请重试");
-        int newRound = interviewSessionService.advanceToNextRound(sessionId, roundNo, answerText, question);
+        int newRound = interviewSessionService.advanceToNextRound(sessionId, currentUserId, roundNo, answerText, question);
         return new InterviewAnswerResponse(sessionId, newRound, InterviewSession.STATUS_ONGOING, question);
     }
 
-    private InterviewAnswerResponse saveLastAnswer(Long sessionId, int roundNo, String answerText) {
-        interviewSessionService.endSessionWithLastAnswer(sessionId, roundNo, answerText);
+    private InterviewAnswerResponse saveLastAnswer(Long sessionId, Long currentUserId, int roundNo, String answerText) {
+        interviewSessionService.endSessionWithLastAnswer(sessionId, currentUserId, roundNo, answerText);
         return new InterviewAnswerResponse(sessionId, roundNo, InterviewSession.STATUS_ENDED, "");
     }
 

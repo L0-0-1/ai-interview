@@ -12,6 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,29 +37,37 @@ public class InterviewController {
     // 开始一场模拟面试：简历全文进模型，成本与简历评审同级，配额收紧到 60 秒 3 次
     @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping(value = "/start", params = "stream!=true")
-    public Result<InterviewStartResponse> start(@RequestBody InterviewStartRequest request) {
+    public Result<InterviewStartResponse> start(@AuthenticationPrincipal Jwt jwt,
+                                                @RequestBody InterviewStartRequest request) {
         // Controller 只做协议搬运：取参、调 Service、包统一信封；校验和业务都在 Service 里
-        return Result.success(interviewService.start(request.getResumeText(), request.getTargetPosition()));
+        return Result.success(interviewService.start(Long.valueOf(jwt.getSubject()),
+                request.getResumeText(), request.getTargetPosition()));
     }
 
     // 答题由会话状态和轮次校验约束，允许连续完成多个轮次。
     @PostMapping(value = "/{sessionId}/answer", params = "stream!=true")
     public Result<InterviewAnswerResponse> answer(@PathVariable Long sessionId,
+                                                  @AuthenticationPrincipal Jwt jwt,
                                                   @RequestBody InterviewAnswerRequest request) {
         // Controller 只做协议搬运：取参、调 Service、包统一信封；校验和业务都在 Service 里
-        return Result.success(interviewService.answer(sessionId, request.getRoundNo(), request.getAnswerText()));
+        return Result.success(interviewService.answer(sessionId, Long.valueOf(jwt.getSubject()),
+                request.getRoundNo(), request.getAnswerText()));
     }
 
     @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping(value = "/start", params = "stream=true", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<Object>> startStream(@RequestBody InterviewStartRequest request) {
-        return toSse(interviewService.streamStart(request.getResumeText(), request.getTargetPosition()));
+    public Flux<ServerSentEvent<Object>> startStream(@AuthenticationPrincipal Jwt jwt,
+                                                      @RequestBody InterviewStartRequest request) {
+        return toSse(interviewService.streamStart(Long.valueOf(jwt.getSubject()),
+                request.getResumeText(), request.getTargetPosition()));
     }
 
     @PostMapping(value = "/{sessionId}/answer", params = "stream=true", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<Object>> answerStream(@PathVariable Long sessionId,
+                                                      @AuthenticationPrincipal Jwt jwt,
                                                       @RequestBody InterviewAnswerRequest request) {
-        return toSse(interviewService.streamAnswer(sessionId, request.getRoundNo(), request.getAnswerText()));
+        return toSse(interviewService.streamAnswer(sessionId, Long.valueOf(jwt.getSubject()),
+                request.getRoundNo(), request.getAnswerText()));
     }
 
     private Flux<ServerSentEvent<Object>> toSse(Flux<InterviewService.StreamEvent> events) {

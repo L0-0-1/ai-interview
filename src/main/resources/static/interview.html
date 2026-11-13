@@ -24,7 +24,15 @@
             <h1 id="setup-title">开始一场模拟面试</h1>
             <p>告诉面试官你想投什么岗位，再贴上简历。接下来一题一题聊。</p>
         </div>
-        <form class="setup-form" id="setup-form">
+        <form class="setup-form" id="login-form">
+            <label for="login-username">账号名</label>
+            <input id="login-username" autocomplete="username" required>
+            <label for="login-password">密码</label>
+            <input id="login-password" type="password" autocomplete="current-password" required>
+            <p class="error-text" id="login-error" role="alert" hidden></p>
+            <button class="button button-primary" id="login-button" type="submit">登录</button>
+        </form>
+        <form class="setup-form" id="setup-form" hidden>
             <label for="target-position">目标岗位</label>
             <input id="target-position" placeholder="例如 Java 后端开发实习生" required>
             <label for="resume-text">简历内容</label>
@@ -40,6 +48,7 @@
             <p class="room-position" id="room-position"></p>
             <p class="room-progress" id="room-progress" role="status"></p>
             <button class="button button-secondary" id="restart-button" type="button" hidden>再练一场</button>
+            <button class="button button-secondary" id="reauth-button" type="button" hidden>重新登录</button>
         </aside>
 
         <div class="room-dialogue">

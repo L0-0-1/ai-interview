@@ -33,6 +33,9 @@ public class InterviewSession {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 创建会话的账号 ID，旧演示记录可以为空。 */
+    private Long userId;
+
     /**
      * 简历原文快照 → 列 resume_text。
      * 为什么把整份简历存进会话：后续每一轮出题/追问都依据简历内容，
@@ -67,6 +70,14 @@ public class InterviewSession {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public String getResumeText() {

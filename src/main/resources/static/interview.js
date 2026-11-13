@@ -1,4 +1,10 @@
 const setup = document.querySelector('#setup');
+const setupForm = document.querySelector('#setup-form');
+const loginForm = document.querySelector('#login-form');
+const loginUsername = document.querySelector('#login-username');
+const loginPassword = document.querySelector('#login-password');
+const loginButton = document.querySelector('#login-button');
+const loginError = document.querySelector('#login-error');
 const room = document.querySelector('#room');
 const position = document.querySelector('#target-position');
 const resume = document.querySelector('#resume-text');
@@ -13,18 +19,78 @@ const answer = document.querySelector('#answer-text');
 const answerError = document.querySelector('#answer-error');
 const sendButton = document.querySelector('#send-button');
 const restartButton = document.querySelector('#restart-button');
+const reauthButton = document.querySelector('#reauth-button');
 
 let session = null;
 let pending = false;
+let token = '';
+let userId = null;
 
 const interruptedMessage = '连接中断，没收到保存确认。你的输入还在。';
+
+function showLogin(message = '') {
+    room.hidden = true;
+    setup.hidden = false;
+    setupForm.hidden = true;
+    loginForm.hidden = false;
+    loginUsername.readOnly = Boolean(session);
+    setError(loginError, message);
+    (session ? loginPassword : loginUsername).focus();
+}
+
+async function login(event) {
+    event.preventDefault();
+    if (loginButton.disabled) {
+        return;
+    }
+    loginButton.disabled = true;
+    setError(loginError);
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: loginUsername.value, password: loginPassword.value })
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.data?.token) {
+            throw new Error(result?.message || '登录失败，请稍后再试。');
+        }
+        if (session && userId !== result.data.userId) {
+            throw new Error('请用创建这场面试的账号登录。');
+        }
+
+        token = result.data.token;
+        userId = result.data.userId;
+        loginPassword.value = '';
+        loginForm.hidden = true;
+        setupForm.hidden = false;
+        reauthButton.hidden = true;
+        if (session) {
+            setup.hidden = true;
+            room.hidden = false;
+            setError(answerError);
+            updateSendButton();
+            answer.focus({ preventScroll: true });
+        } else {
+            position.focus();
+        }
+    } catch (error) {
+        setError(loginError, error.message);
+    } finally {
+        loginButton.disabled = false;
+    }
+}
 
 async function streamInterview(path, body, onDelta) {
     let response;
     try {
         response = await fetch(`${path}?stream=true`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream, application/json;q=0.9' },
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'text/event-stream, application/json;q=0.9',
+                Authorization: `Bearer ${token}`
+            },
             body: JSON.stringify(body)
         });
     } catch {
@@ -32,6 +98,10 @@ async function streamInterview(path, body, onDelta) {
     }
 
     if (!response.ok) {
+        if (response.status === 401) {
+            token = '';
+            throw new Error('登录已失效，请重新登录。');
+        }
         const error = await response.json().catch(() => null);
         const message = response.status === 429 ? '请求太频繁，请稍等一会儿再试。' : `请求失败（${response.status}）`;
         throw new Error(error?.message || message);
@@ -140,11 +210,15 @@ function pendingQuestion() {
 }
 
 function updateSendButton() {
-    sendButton.disabled = pending || !answer.value.trim();
+    sendButton.disabled = pending || !token || !answer.value.trim();
 }
 
 async function start() {
     if (pending) {
+        return;
+    }
+    if (!token) {
+        showLogin();
         return;
     }
     const targetPosition = position.value.trim();
@@ -174,7 +248,11 @@ async function start() {
         room.hidden = true;
         setup.hidden = false;
         setError(setupError, error.message);
-        resume.focus({ preventScroll: true });
+        if (token) {
+            resume.focus({ preventScroll: true });
+        } else {
+            showLogin(error.message);
+        }
     } finally {
         pending = false;
         startButton.disabled = false;
@@ -184,7 +262,7 @@ async function start() {
 
 async function submitAnswer() {
     const answerText = answer.value;
-    if (pending || !session || session.status === 'ENDED' || !answerText.trim()) {
+    if (pending || !token || !session || session.status === 'ENDED' || !answerText.trim()) {
         return;
     }
 
@@ -216,6 +294,7 @@ async function submitAnswer() {
         candidate.item.remove();
         progress.textContent = `第 ${session.currentRound} 轮`;
         setError(answerError, error.message);
+        reauthButton.hidden = Boolean(token);
     } finally {
         pending = false;
         answer.readOnly = false;
@@ -226,7 +305,8 @@ async function submitAnswer() {
     }
 }
 
-document.querySelector('#setup-form').addEventListener('submit', event => event.preventDefault());
+loginForm.addEventListener('submit', login);
+setupForm.addEventListener('submit', event => event.preventDefault());
 composer.addEventListener('submit', event => event.preventDefault());
 answer.addEventListener('input', updateSendButton);
 answer.addEventListener('keydown', event => {
@@ -241,6 +321,7 @@ answer.addEventListener('keydown', event => {
 });
 startButton.addEventListener('click', start);
 sendButton.addEventListener('click', submitAnswer);
+reauthButton.addEventListener('click', () => showLogin());
 restartButton.addEventListener('click', () => {
     session = null;
     messages.replaceChildren();

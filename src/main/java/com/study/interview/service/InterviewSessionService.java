@@ -52,10 +52,11 @@ public class InterviewSessionService {
      * 冒泡出本方法，Spring 就回滚两条写——本方法只负责抛，不负责 catch。
      */
     @Transactional
-    public Long createSessionAndFirstMessage(String resumeText, String targetPosition, String question) {
+    public Long createSessionAndFirstMessage(Long currentUserId, String resumeText, String targetPosition, String question) {
         // 第一条写：会话表。currentRound=1、maxRound=8、status=ONGOING
         // 都是「开始一场面试」的固有初始值，由代码写死，不信任调用方传入
         InterviewSession session = new InterviewSession();
+        session.setUserId(currentUserId);
         session.setResumeText(resumeText);
         session.setTargetPosition(targetPosition);
         session.setCurrentRound(1);
@@ -85,17 +86,14 @@ public class InterviewSessionService {
 
     // ---------- 读：提交回答前的存在性 / 状态 / 题目检查 ----------
 
-    /**
-     * 按 id 查会话；不存在 → 1002 + HTTP 404（与 ResumeService.getById 同款约定）。
-     *
-     * 为什么读操作不放 @Transactional：selectById 是单条 SQL，自身原子，
-     * 无需借用事务；会话随后还要被检查状态/轮次，真正的并发防线在下面的
-     * 条件更新里（见 advanceToNextRound），不靠这里的读。
-     */
-    public InterviewSession getSessionOrThrow(Long sessionId) {
-        InterviewSession session = sessionMapper.selectById(sessionId);
+    /** 按会话 ID 和当前账号查询。未找到属于当前账号的会话时返回 404。 */
+    public InterviewSession getOwnedSessionOrThrow(Long sessionId, Long currentUserId) {
+        InterviewSession session = sessionMapper.selectOne(
+                new LambdaQueryWrapper<InterviewSession>()
+                        .eq(InterviewSession::getId, sessionId)
+                        .eq(InterviewSession::getUserId, currentUserId)
+        );
         if (session == null) {
-            // 资源不存在 → 1002 + 404，与「参数填错」分开（1001 只留给参数问题）
             throw new BizException(1002, HttpStatus.NOT_FOUND, "面试会话不存在");
         }
         return session;
@@ -127,7 +125,7 @@ public class InterviewSessionService {
     /**
      * 短事务：普通轮次提交 = 条件更新轮次 + 写候选人回答 + 写下一轮题目。
      *
-     * 为什么更新必须带「会话 ID + ONGOING + 旧轮次」三个条件：
+     * 为什么更新必须带「会话 ID + 账号 ID + ONGOING + 旧轮次」：
      *   它们是「推进前那一刻的状态」——两个请求同时提交同一轮时，
      *   只有先拿到锁的那个把 current_round 改掉；后一个再来，条件里
      *   current_round=旧轮次 已经不成立，影响行数为 0，直接判冲突，
@@ -142,11 +140,12 @@ public class InterviewSessionService {
      *   全部回滚，会话原样等待第 N 轮，请求可原样重试。
      */
     @Transactional
-    public int advanceToNextRound(Long sessionId, int submittedRound, String answerText, String nextQuestion) {
+    public int advanceToNextRound(Long sessionId, Long currentUserId, int submittedRound, String answerText, String nextQuestion) {
         // 第一条写：条件更新轮次。影响行数 0 = 条件没匹配上：
         // 会话已结束 / 轮次已被并发请求推进（或会话被删），一律按状态冲突回 409
         int updated = sessionMapper.update(null, new LambdaUpdateWrapper<InterviewSession>()
                 .eq(InterviewSession::getId, sessionId)
+                .eq(InterviewSession::getUserId, currentUserId)
                 .eq(InterviewSession::getStatus, InterviewSession.STATUS_ONGOING)
                 .eq(InterviewSession::getCurrentRound, submittedRound)
                 .set(InterviewSession::getCurrentRound, submittedRound + 1));
@@ -190,10 +189,11 @@ public class InterviewSessionService {
      *      重复提交影响行数为 0 → 1003 + 409。
      */
     @Transactional
-    public void endSessionWithLastAnswer(Long sessionId, int submittedRound, String answerText) {
+    public void endSessionWithLastAnswer(Long sessionId, Long currentUserId, int submittedRound, String answerText) {
         // 第一条写：条件更新状态为 ENDED（轮次不动）
         int updated = sessionMapper.update(null, new LambdaUpdateWrapper<InterviewSession>()
                 .eq(InterviewSession::getId, sessionId)
+                .eq(InterviewSession::getUserId, currentUserId)
                 .eq(InterviewSession::getStatus, InterviewSession.STATUS_ONGOING)
                 .eq(InterviewSession::getCurrentRound, submittedRound)
                 .set(InterviewSession::getStatus, InterviewSession.STATUS_ENDED));

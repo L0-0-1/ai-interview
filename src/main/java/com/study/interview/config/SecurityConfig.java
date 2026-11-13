@@ -20,8 +20,9 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain currentUserSecurity(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
-        return http.securityMatcher("/api/auth/me")
+        return http.securityMatcher("/api/auth/me", "/api/interview/**")
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/interview/**"))
                 .authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.decoder(jwtDecoder)))
                 .build();

@@ -66,11 +66,15 @@
 
 ### 2. 依赖服务
 
-需要本机跑 **MySQL 8** 和 **Redis Stack**（Docker 即可）。建库建表一条命令：
+需要本机跑 **MySQL 8** 和 **Redis Stack**（Docker 即可）。新库依次执行以下脚本：
 
 ```bash
 mysql -u root -p < sql/schema.sql
+mysql -u root -p < sql/user_schema.sql
+mysql -u root -p < sql/interview_schema.sql
 ```
+
+已有面试会话表但缺少 `user_id` 的本地库，执行一次 [会话归属迁移](sql/interview_session_owner_migration.sql)。旧记录保留，新增列默认是 `NULL`。
 
 ### 3. 运行
 

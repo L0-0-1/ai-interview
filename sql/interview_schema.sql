@@ -23,6 +23,7 @@ USE `ai_interview`;
 CREATE TABLE IF NOT EXISTS `interview_session`
 (
     `id`               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`          BIGINT       DEFAULT NULL COMMENT '所属账号 ID，旧演示记录可为空',
     `resume_text`      LONGTEXT     NOT NULL COMMENT '简历原文快照：后续每一轮出题/追问都依据它，请求方只需在开始时传一次',
     `target_position`  VARCHAR(128) NOT NULL COMMENT '目标岗位：出题围绕岗位要求展开',
     `current_round`    INT          NOT NULL COMMENT '当前轮次，创建时为 1（每完成一轮回答 +1，留给后续回答流程）',
