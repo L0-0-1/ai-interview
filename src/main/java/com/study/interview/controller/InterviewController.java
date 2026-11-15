@@ -1,13 +1,16 @@
 package com.study.interview.controller;
 
 import com.study.interview.common.Result;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.study.interview.config.RateLimit;
+import com.study.interview.controller.dto.InterviewHistoryItem;
 import com.study.interview.exception.BizException;
 import com.study.interview.model.InterviewAnswerRequest;
 import com.study.interview.model.InterviewAnswerResponse;
 import com.study.interview.model.InterviewStartRequest;
 import com.study.interview.model.InterviewStartResponse;
 import com.study.interview.service.InterviewService;
+import com.study.interview.service.InterviewSessionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -15,9 +18,11 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -29,9 +34,18 @@ public class InterviewController {
     private static final Logger log = LoggerFactory.getLogger(InterviewController.class);
 
     private final InterviewService interviewService;
+    private final InterviewSessionService sessionService;
 
-    public InterviewController(InterviewService interviewService) {
+    public InterviewController(InterviewService interviewService, InterviewSessionService sessionService) {
         this.interviewService = interviewService;
+        this.sessionService = sessionService;
+    }
+
+    @GetMapping("/history")
+    public Result<Page<InterviewHistoryItem>> history(@AuthenticationPrincipal Jwt jwt,
+                                                     @RequestParam(defaultValue = "1") int page,
+                                                     @RequestParam(defaultValue = "10") int size) {
+        return Result.success(sessionService.history(Long.valueOf(jwt.getSubject()), page, size));
     }
 
     // 开始一场模拟面试：简历全文进模型，成本与简历评审同级，配额收紧到 60 秒 3 次

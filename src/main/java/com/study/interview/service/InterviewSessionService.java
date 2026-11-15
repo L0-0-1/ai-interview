@@ -2,6 +2,8 @@ package com.study.interview.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.study.interview.controller.dto.InterviewHistoryItem;
 import com.study.interview.exception.BizException;
 import com.study.interview.mapper.InterviewMessageMapper;
 import com.study.interview.mapper.InterviewSessionMapper;
@@ -85,6 +87,25 @@ public class InterviewSessionService {
     }
 
     // ---------- 读：提交回答前的存在性 / 状态 / 题目检查 ----------
+
+    public Page<InterviewHistoryItem> history(Long currentUserId, int current, int size) {
+        if (current < 1 || size < 1 || size > 50) {
+            throw new BizException(1001, "分页参数不合法：page 从 1 起，size 在 1-50 之间");
+        }
+        var query = new LambdaQueryWrapper<InterviewSession>()
+                .select(InterviewSession::getId, InterviewSession::getTargetPosition,
+                        InterviewSession::getCreateTime, InterviewSession::getStatus,
+                        InterviewSession::getCurrentRound)
+                .eq(InterviewSession::getUserId, currentUserId)
+                .orderByDesc(InterviewSession::getId);
+        Page<InterviewSession> sessions = sessionMapper.selectPage(new Page<>(current, size), query);
+        Page<InterviewHistoryItem> result = new Page<>(sessions.getCurrent(), sessions.getSize(), sessions.getTotal());
+        result.setRecords(sessions.getRecords().stream()
+                .map(session -> new InterviewHistoryItem(session.getId(), session.getTargetPosition(),
+                        session.getCreateTime(), session.getStatus(), session.getCurrentRound()))
+                .toList());
+        return result;
+    }
 
     /** 按会话 ID 和当前账号查询。未找到属于当前账号的会话时返回 404。 */
     public InterviewSession getOwnedSessionOrThrow(Long sessionId, Long currentUserId) {

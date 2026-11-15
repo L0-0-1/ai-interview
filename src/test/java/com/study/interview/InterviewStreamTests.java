@@ -1,5 +1,7 @@
 package com.study.interview;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.study.interview.controller.dto.InterviewHistoryItem;
 import com.study.interview.config.RateLimitInterceptor;
 import com.study.interview.config.SecurityConfig;
 import com.study.interview.controller.InterviewController;
@@ -49,6 +51,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
@@ -69,6 +72,22 @@ class InterviewStreamTests {
     void setUp() {
         reset(chatClient, sessions, redis);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(securityFilter).build();
+    }
+
+    @Test
+    void historyRequiresAuthenticationAndUsesVerifiedUserId() throws Exception {
+        mvc.perform(get("/api/interview/history")).andExpect(status().isUnauthorized());
+        Page<InterviewHistoryItem> page = new Page<>(1, 10, 1);
+        page.setRecords(List.of(new InterviewHistoryItem(7L, "后端", null, "ONGOING", 2)));
+        when(sessions.history(1L, 1, 10)).thenReturn(page);
+
+        mvc.perform(get("/api/interview/history").header("Authorization", "Bearer " + tokenService.issue(1L))
+                        .queryParam("userId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].id").value(7))
+                .andExpect(jsonPath("$.data.records[0].resumeText").doesNotExist());
+        verify(sessions).history(1L, 1, 10);
     }
 
     @Test
