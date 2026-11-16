@@ -3,6 +3,7 @@ package com.study.interview.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.study.interview.controller.dto.InterviewDetail;
 import com.study.interview.controller.dto.InterviewHistoryItem;
 import com.study.interview.exception.BizException;
 import com.study.interview.mapper.InterviewMessageMapper;
@@ -11,7 +12,10 @@ import com.study.interview.model.InterviewMessage;
 import com.study.interview.model.InterviewSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * 面试会话的数据库读写层：只管会话表 + 消息表这两张相关表的读写操作。
@@ -101,10 +105,28 @@ public class InterviewSessionService {
         Page<InterviewSession> sessions = sessionMapper.selectPage(new Page<>(current, size), query);
         Page<InterviewHistoryItem> result = new Page<>(sessions.getCurrent(), sessions.getSize(), sessions.getTotal());
         result.setRecords(sessions.getRecords().stream()
-                .map(session -> new InterviewHistoryItem(session.getId(), session.getTargetPosition(),
-                        session.getCreateTime(), session.getStatus(), session.getCurrentRound()))
+                .map(this::toHistoryItem)
                 .toList());
         return result;
+    }
+
+    // 会话状态和消息使用同一份快照，避免读到提交回答前的轮次和提交后的消息。
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public InterviewDetail detail(Long sessionId, Long currentUserId) {
+        InterviewSession session = getOwnedSessionOrThrow(sessionId, currentUserId);
+        var query = new LambdaQueryWrapper<InterviewMessage>()
+                .eq(InterviewMessage::getSessionId, session.getId())
+                .orderByAsc(InterviewMessage::getId);
+        List<InterviewDetail.Message> messages = messageMapper.selectList(query).stream()
+                .map(message -> new InterviewDetail.Message(message.getId(), message.getRole(),
+                        message.getRoundNo(), message.getContent(), message.getCreateTime()))
+                .toList();
+        return new InterviewDetail(toHistoryItem(session), messages);
+    }
+
+    private InterviewHistoryItem toHistoryItem(InterviewSession session) {
+        return new InterviewHistoryItem(session.getId(), session.getTargetPosition(), session.getCreateTime(),
+                session.getStatus(), session.getCurrentRound());
     }
 
     /** 按会话 ID 和当前账号查询。未找到属于当前账号的会话时返回 404。 */

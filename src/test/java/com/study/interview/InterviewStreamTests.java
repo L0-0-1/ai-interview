@@ -1,6 +1,7 @@
 package com.study.interview;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.study.interview.controller.dto.InterviewDetail;
 import com.study.interview.controller.dto.InterviewHistoryItem;
 import com.study.interview.config.RateLimitInterceptor;
 import com.study.interview.config.SecurityConfig;
@@ -88,6 +89,37 @@ class InterviewStreamTests {
                 .andExpect(jsonPath("$.data.records[0].id").value(7))
                 .andExpect(jsonPath("$.data.records[0].resumeText").doesNotExist());
         verify(sessions).history(1L, 1, 10);
+    }
+
+    @Test
+    void detailRequiresAuthenticationAndUsesVerifiedUserId() throws Exception {
+        mvc.perform(get("/api/interview/7")).andExpect(status().isUnauthorized());
+        InterviewHistoryItem session = new InterviewHistoryItem(7L, "后端", null, "ONGOING", 1);
+        InterviewDetail.Message question = new InterviewDetail.Message(11L, "INTERVIEWER", 1, "你如何做分页？", null);
+        when(sessions.detail(7L, 1L)).thenReturn(new InterviewDetail(session, List.of(question)));
+
+        mvc.perform(get("/api/interview/7").header("Authorization", "Bearer " + tokenService.issue(1L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.id").value(7))
+                .andExpect(jsonPath("$.data.session.resumeText").doesNotExist())
+                .andExpect(jsonPath("$.data.messages[0].role").value("INTERVIEWER"))
+                .andExpect(jsonPath("$.data.messages[0].content").value("你如何做分页？"));
+        verify(sessions).detail(7L, 1L);
+        verifyNoInteractions(chatClient, redis);
+    }
+
+    @Test
+    void detailReturnsNotFoundForAnotherAccount() throws Exception {
+        when(sessions.detail(7L, 2L))
+                .thenThrow(new BizException(1002, HttpStatus.NOT_FOUND, "面试会话不存在"));
+
+        mvc.perform(get("/api/interview/7").header("Authorization", "Bearer " + tokenService.issue(2L))
+                        .queryParam("userId", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(1002))
+                .andExpect(jsonPath("$.data.messages").doesNotExist());
+        verify(sessions).detail(7L, 2L);
+        verifyNoInteractions(chatClient, redis);
     }
 
     @Test

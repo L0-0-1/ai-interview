@@ -3,6 +3,7 @@ package com.study.interview.controller;
 import com.study.interview.common.Result;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.study.interview.config.RateLimit;
+import com.study.interview.controller.dto.InterviewDetail;
 import com.study.interview.controller.dto.InterviewHistoryItem;
 import com.study.interview.exception.BizException;
 import com.study.interview.model.InterviewAnswerRequest;
@@ -46,6 +47,11 @@ public class InterviewController {
                                                      @RequestParam(defaultValue = "1") int page,
                                                      @RequestParam(defaultValue = "10") int size) {
         return Result.success(sessionService.history(Long.valueOf(jwt.getSubject()), page, size));
+    }
+
+    @GetMapping("/{sessionId}")
+    public Result<InterviewDetail> detail(@PathVariable Long sessionId, @AuthenticationPrincipal Jwt jwt) {
+        return Result.success(sessionService.detail(sessionId, Long.valueOf(jwt.getSubject())));
     }
 
     // 开始一场模拟面试：简历全文进模型，成本与简历评审同级，配额收紧到 60 秒 3 次
