@@ -4,7 +4,6 @@ import com.study.interview.common.Result;
 import com.study.interview.config.RateLimit;
 import com.study.interview.model.Resume;
 import com.study.interview.model.ResumeReview;
-import com.study.interview.model.ResumeText;
 import com.study.interview.service.ResumeReviewService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,15 +21,23 @@ public class ResumeReviewController {
     // 简历全文进模型、成本高，配额收紧到 60 秒 3 次
     @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping("/review")
-    public Result<ResumeReview> review(@RequestBody ResumeText resumeText) {
-        ResumeReview resumeReview = resumeReviewService.review(resumeText.getText());
+    public Result<ResumeReview> review(@RequestBody ReviewRequest request) {
+        ResumeReview resumeReview = resumeReviewService.review(request.text());
         return Result.success(resumeReview);
     }
     // 评审简历并保存（同样调 AI，配额一致）
     @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping("/save")
-    public Result<Resume> reviewAndSave(@RequestBody ResumeText resumeText) {
-        Resume resume = resumeReviewService.reviewAndSave(resumeText.getText());
+    public Result<Resume> reviewAndSave(@RequestBody ReviewRequest request) {
+        Resume resume = resumeReviewService.reviewAndSave(request.text());
         return Result.success(resume);
+    }
+
+    public record ReviewRequest(String text) {
+
+        @Override
+        public String toString() {
+            return "ReviewRequest";
+        }
     }
 }

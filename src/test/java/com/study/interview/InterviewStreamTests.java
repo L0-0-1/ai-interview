@@ -2,7 +2,7 @@ package com.study.interview;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.study.interview.controller.dto.InterviewDetail;
-import com.study.interview.controller.dto.InterviewHistoryItem;
+import com.study.interview.controller.dto.InterviewSessionSummary;
 import com.study.interview.config.RateLimitInterceptor;
 import com.study.interview.config.SecurityConfig;
 import com.study.interview.controller.InterviewController;
@@ -78,8 +78,8 @@ class InterviewStreamTests {
     @Test
     void historyRequiresAuthenticationAndUsesVerifiedUserId() throws Exception {
         mvc.perform(get("/api/interview/history")).andExpect(status().isUnauthorized());
-        Page<InterviewHistoryItem> page = new Page<>(1, 10, 1);
-        page.setRecords(List.of(new InterviewHistoryItem(7L, "后端", null, "ONGOING", 2)));
+        Page<InterviewSessionSummary> page = new Page<>(1, 10, 1);
+        page.setRecords(List.of(new InterviewSessionSummary(7L, "后端", null, "ONGOING", 2)));
         when(sessions.history(1L, 1, 10)).thenReturn(page);
 
         mvc.perform(get("/api/interview/history").header("Authorization", "Bearer " + tokenService.issue(1L))
@@ -94,7 +94,7 @@ class InterviewStreamTests {
     @Test
     void detailRequiresAuthenticationAndUsesVerifiedUserId() throws Exception {
         mvc.perform(get("/api/interview/7")).andExpect(status().isUnauthorized());
-        InterviewHistoryItem session = new InterviewHistoryItem(7L, "后端", null, "ONGOING", 1);
+        InterviewSessionSummary session = new InterviewSessionSummary(7L, "后端", null, "ONGOING", 1);
         InterviewDetail.Message question = new InterviewDetail.Message(11L, "INTERVIEWER", 1, "你如何做分页？", null);
         when(sessions.detail(7L, 1L)).thenReturn(new InterviewDetail(session, List.of(question)));
 

@@ -9,9 +9,7 @@ import java.time.LocalDateTime;
 /**
  * 数据库实体：interview_session 表的一行 = 一场模拟面试。
  *
- * 为什么必须是普通 class 而不是 record（与 Resume 同款原因）：
- * MyBatis 灌值流程是「反射调无参构造 new 空对象 → 逐列调 setter」，
- * record 没有无参构造、字段 final 没有 setter，当实体直接失败。
+ * 本项目用可变实体填充列值，并接收数据库生成的主键。
  *
  * 与 InterviewMessage 的一对多关系：本表是「一」方，消息表是「多」方，
  * 通过消息表的 session_id 列关联（逻辑外键，见 interview_schema.sql 注释）。

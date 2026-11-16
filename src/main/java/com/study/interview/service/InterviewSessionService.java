@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.study.interview.controller.dto.InterviewDetail;
-import com.study.interview.controller.dto.InterviewHistoryItem;
+import com.study.interview.controller.dto.InterviewSessionSummary;
 import com.study.interview.exception.BizException;
 import com.study.interview.mapper.InterviewMessageMapper;
 import com.study.interview.mapper.InterviewSessionMapper;
@@ -92,7 +92,7 @@ public class InterviewSessionService {
 
     // ---------- 读：提交回答前的存在性 / 状态 / 题目检查 ----------
 
-    public Page<InterviewHistoryItem> history(Long currentUserId, int current, int size) {
+    public Page<InterviewSessionSummary> history(Long currentUserId, int current, int size) {
         if (current < 1 || size < 1 || size > 50) {
             throw new BizException(1001, "分页参数不合法：page 从 1 起，size 在 1-50 之间");
         }
@@ -103,9 +103,9 @@ public class InterviewSessionService {
                 .eq(InterviewSession::getUserId, currentUserId)
                 .orderByDesc(InterviewSession::getId);
         Page<InterviewSession> sessions = sessionMapper.selectPage(new Page<>(current, size), query);
-        Page<InterviewHistoryItem> result = new Page<>(sessions.getCurrent(), sessions.getSize(), sessions.getTotal());
+        Page<InterviewSessionSummary> result = new Page<>(sessions.getCurrent(), sessions.getSize(), sessions.getTotal());
         result.setRecords(sessions.getRecords().stream()
-                .map(this::toHistoryItem)
+                .map(this::toSessionSummary)
                 .toList());
         return result;
     }
@@ -121,18 +121,21 @@ public class InterviewSessionService {
                 .map(message -> new InterviewDetail.Message(message.getId(), message.getRole(),
                         message.getRoundNo(), message.getContent(), message.getCreateTime()))
                 .toList();
-        return new InterviewDetail(toHistoryItem(session), messages);
+        return new InterviewDetail(toSessionSummary(session), messages);
     }
 
-    private InterviewHistoryItem toHistoryItem(InterviewSession session) {
-        return new InterviewHistoryItem(session.getId(), session.getTargetPosition(), session.getCreateTime(),
+    private InterviewSessionSummary toSessionSummary(InterviewSession session) {
+        return new InterviewSessionSummary(session.getId(), session.getTargetPosition(), session.getCreateTime(),
                 session.getStatus(), session.getCurrentRound());
     }
 
-    /** 按会话 ID 和当前账号查询。未找到属于当前账号的会话时返回 404。 */
+    /** 读取当前账号的会话元数据。未找到属于当前账号的会话时返回 404。 */
     public InterviewSession getOwnedSessionOrThrow(Long sessionId, Long currentUserId) {
         InterviewSession session = sessionMapper.selectOne(
                 new LambdaQueryWrapper<InterviewSession>()
+                        .select(InterviewSession::getId, InterviewSession::getTargetPosition,
+                                InterviewSession::getCreateTime, InterviewSession::getStatus,
+                                InterviewSession::getCurrentRound, InterviewSession::getMaxRound)
                         .eq(InterviewSession::getId, sessionId)
                         .eq(InterviewSession::getUserId, currentUserId)
         );

@@ -3,13 +3,11 @@ package com.study.interview.controller;
 import com.study.interview.common.Result;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.study.interview.config.RateLimit;
+import com.study.interview.controller.dto.InterviewAnswerResponse;
 import com.study.interview.controller.dto.InterviewDetail;
-import com.study.interview.controller.dto.InterviewHistoryItem;
+import com.study.interview.controller.dto.InterviewSessionSummary;
+import com.study.interview.controller.dto.InterviewStartResponse;
 import com.study.interview.exception.BizException;
-import com.study.interview.model.InterviewAnswerRequest;
-import com.study.interview.model.InterviewAnswerResponse;
-import com.study.interview.model.InterviewStartRequest;
-import com.study.interview.model.InterviewStartResponse;
 import com.study.interview.service.InterviewService;
 import com.study.interview.service.InterviewSessionService;
 import org.slf4j.Logger;
@@ -43,9 +41,9 @@ public class InterviewController {
     }
 
     @GetMapping("/history")
-    public Result<Page<InterviewHistoryItem>> history(@AuthenticationPrincipal Jwt jwt,
-                                                     @RequestParam(defaultValue = "1") int page,
-                                                     @RequestParam(defaultValue = "10") int size) {
+    public Result<Page<InterviewSessionSummary>> history(@AuthenticationPrincipal Jwt jwt,
+                                                         @RequestParam(defaultValue = "1") int page,
+                                                         @RequestParam(defaultValue = "10") int size) {
         return Result.success(sessionService.history(Long.valueOf(jwt.getSubject()), page, size));
     }
 
@@ -58,36 +56,34 @@ public class InterviewController {
     @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping(value = "/start", params = "stream!=true")
     public Result<InterviewStartResponse> start(@AuthenticationPrincipal Jwt jwt,
-                                                @RequestBody InterviewStartRequest request) {
-        // Controller 只做协议搬运：取参、调 Service、包统一信封；校验和业务都在 Service 里
+                                                @RequestBody StartRequest request) {
         return Result.success(interviewService.start(Long.valueOf(jwt.getSubject()),
-                request.getResumeText(), request.getTargetPosition()));
+                request.resumeText(), request.targetPosition()));
     }
 
     // 答题由会话状态和轮次校验约束，允许连续完成多个轮次。
     @PostMapping(value = "/{sessionId}/answer", params = "stream!=true")
     public Result<InterviewAnswerResponse> answer(@PathVariable Long sessionId,
                                                   @AuthenticationPrincipal Jwt jwt,
-                                                  @RequestBody InterviewAnswerRequest request) {
-        // Controller 只做协议搬运：取参、调 Service、包统一信封；校验和业务都在 Service 里
+                                                  @RequestBody AnswerRequest request) {
         return Result.success(interviewService.answer(sessionId, Long.valueOf(jwt.getSubject()),
-                request.getRoundNo(), request.getAnswerText()));
+                request.roundNo(), request.answerText()));
     }
 
     @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping(value = "/start", params = "stream=true", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<Object>> startStream(@AuthenticationPrincipal Jwt jwt,
-                                                      @RequestBody InterviewStartRequest request) {
+                                                      @RequestBody StartRequest request) {
         return toSse(interviewService.streamStart(Long.valueOf(jwt.getSubject()),
-                request.getResumeText(), request.getTargetPosition()));
+                request.resumeText(), request.targetPosition()));
     }
 
     @PostMapping(value = "/{sessionId}/answer", params = "stream=true", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<Object>> answerStream(@PathVariable Long sessionId,
                                                       @AuthenticationPrincipal Jwt jwt,
-                                                      @RequestBody InterviewAnswerRequest request) {
+                                                      @RequestBody AnswerRequest request) {
         return toSse(interviewService.streamAnswer(sessionId, Long.valueOf(jwt.getSubject()),
-                request.getRoundNo(), request.getAnswerText()));
+                request.roundNo(), request.answerText()));
     }
 
     private Flux<ServerSentEvent<Object>> toSse(Flux<InterviewService.StreamEvent> events) {
@@ -102,5 +98,21 @@ public class InterviewController {
 
     private ServerSentEvent<Object> sse(String event, Object data) {
         return ServerSentEvent.builder(data).event(event).build();
+    }
+
+    public record StartRequest(String resumeText, String targetPosition) {
+
+        @Override
+        public String toString() {
+            return "StartRequest";
+        }
+    }
+
+    public record AnswerRequest(Integer roundNo, String answerText) {
+
+        @Override
+        public String toString() {
+            return "AnswerRequest[roundNo=" + roundNo + "]";
+        }
     }
 }

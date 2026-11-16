@@ -13,8 +13,7 @@ import java.time.LocalDateTime;
  *   - ResumeReview（record）：AI 结构化输出的形状，走 Jackson 反序列化
  *   - Resume（本类，class）：数据库行的形状，走 MyBatis 反射填充
  *   - 两者的桥：reviewJson 字段——落库时把 ResumeReview 序列化成 JSON 文本、原样封存进这一列
- * 本类必须是普通 class：MyBatis 灌值的流程是「反射调无参构造 new 空对象 → 逐列调 setter」，
- * record 没有无参构造、字段 final 没有 setter，当实体直接失败。
+ * 本项目用可变实体填充列值，并接收数据库生成的主键。
  */
 @TableName("Resume")
 // 显式表名的原因（源码 TableInfoHelper.initTableName）：

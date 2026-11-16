@@ -1,9 +1,9 @@
 package com.study.interview.service;
 
+import com.study.interview.controller.dto.InterviewAnswerResponse;
+import com.study.interview.controller.dto.InterviewStartResponse;
 import com.study.interview.exception.BizException;
-import com.study.interview.model.InterviewAnswerResponse;
 import com.study.interview.model.InterviewSession;
-import com.study.interview.model.InterviewStartResponse;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

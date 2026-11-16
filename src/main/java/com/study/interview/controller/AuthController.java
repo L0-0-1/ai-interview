@@ -1,9 +1,6 @@
 package com.study.interview.controller;
 
 import com.study.interview.common.Result;
-import com.study.interview.controller.dto.AccountResult;
-import com.study.interview.controller.dto.AuthRequest;
-import com.study.interview.controller.dto.LoginResult;
 import com.study.interview.service.AuthService;
 import com.study.interview.service.JwtTokenService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -42,5 +39,23 @@ public class AuthController {
     @GetMapping("/me")
     public Result<AccountResult> me(@AuthenticationPrincipal Jwt jwt) {
         return Result.success(new AccountResult(Long.valueOf(jwt.getSubject())));
+    }
+
+    public record AuthRequest(String username, String password) {
+
+        @Override
+        public String toString() {
+            return "AuthRequest[username=" + username + "]";
+        }
+    }
+
+    public record AccountResult(Long userId) {}
+
+    public record LoginResult(Long userId, String token) {
+
+        @Override
+        public String toString() {
+            return "LoginResult[userId=" + userId + "]";
+        }
     }
 }
