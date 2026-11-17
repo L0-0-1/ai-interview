@@ -18,8 +18,10 @@ const composer = document.querySelector('#composer');
 const answer = document.querySelector('#answer-text');
 const answerError = document.querySelector('#answer-error');
 const sendButton = document.querySelector('#send-button');
+const endButton = document.querySelector('#end-button');
 const restartButton = document.querySelector('#restart-button');
 const reauthButton = document.querySelector('#reauth-button');
+const roomError = document.querySelector('#room-error');
 
 let session = null;
 let pending = false;
@@ -65,20 +67,78 @@ async function login(event) {
         loginForm.hidden = true;
         setupForm.hidden = false;
         reauthButton.hidden = true;
+        setError(setupError);
+        setError(roomError);
         if (session) {
             setup.hidden = true;
             room.hidden = false;
             setError(answerError);
-            updateSendButton();
+            updateRoomActions();
             answer.focus({ preventScroll: true });
         } else {
-            position.focus();
+            startButton.disabled = true;
+            try {
+                if (!await restoreOngoingInterview()) {
+                    position.focus();
+                }
+            } catch (error) {
+                if (token) {
+                    setError(setupError, error.message);
+                    position.focus();
+                } else {
+                    showLogin(error.message);
+                }
+            } finally {
+                startButton.disabled = false;
+            }
         }
     } catch (error) {
         setError(loginError, error.message);
     } finally {
         loginButton.disabled = false;
     }
+}
+
+async function requestInterview(path, method = 'GET') {
+    let response;
+    try {
+        response = await fetch(path, {
+            method,
+            headers: { Authorization: `Bearer ${token}` }
+        });
+    } catch {
+        throw new Error('连接中断，请稍后重试。');
+    }
+    if (response.status === 401) {
+        token = '';
+        throw new Error('登录已失效，请重新登录。');
+    }
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.code !== 0) {
+        throw new Error(result?.message || `请求失败（${response.status}）`);
+    }
+    return result.data;
+}
+
+async function restoreOngoingInterview() {
+    const detail = await requestInterview('/api/interview/ongoing');
+    if (!detail) {
+        return false;
+    }
+    const { id, targetPosition, currentRound, status } = detail.session;
+    session = { sessionId: id, currentRound, status };
+    messages.replaceChildren();
+    setup.hidden = true;
+    room.hidden = false;
+    roomPosition.textContent = targetPosition;
+    progress.textContent = `第 ${currentRound} 轮`;
+    for (const { role, content } of detail.messages) {
+        appendMessage(role === 'INTERVIEWER' ? 'interviewer' : 'candidate', content);
+    }
+    composer.hidden = false;
+    updateRoomActions();
+    answer.focus({ preventScroll: true });
+    return true;
 }
 
 async function streamInterview(path, body, onDelta) {
@@ -104,7 +164,7 @@ async function streamInterview(path, body, onDelta) {
         }
         const error = await response.json().catch(() => null);
         const message = response.status === 429 ? '请求太频繁，请稍等一会儿再试。' : `请求失败（${response.status}）`;
-        throw new Error(error?.message || message);
+        throw Object.assign(new Error(error?.message || message), { code: error?.code });
     }
     if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
         throw new Error('没有收到面试对话，请确认后端已更新并重启。');
@@ -134,7 +194,7 @@ async function streamInterview(path, body, onDelta) {
                 } else if (type === 'done') {
                     return data;
                 } else if (type === 'problem') {
-                    throw new Error(data.message);
+                    throw Object.assign(new Error(data.message), { code: data.code });
                 }
             }
         }
@@ -209,8 +269,42 @@ function pendingQuestion() {
     };
 }
 
-function updateSendButton() {
-    sendButton.disabled = pending || !token || !answer.value.trim();
+function updateRoomActions() {
+    const ongoing = session && session.status !== 'ENDED';
+    sendButton.disabled = !ongoing || pending || !token || !answer.value.trim();
+    endButton.hidden = !ongoing || !token;
+    endButton.disabled = pending;
+}
+
+function showEnded() {
+    session.status = 'ENDED';
+    composer.hidden = true;
+    progress.textContent = '面试已结束';
+    restartButton.hidden = false;
+    restartButton.focus({ preventScroll: true });
+}
+
+async function endInterview() {
+    if (pending || !token || !session || session.status === 'ENDED') {
+        return;
+    }
+    pending = true;
+    updateRoomActions();
+    setError(roomError);
+    try {
+        await requestInterview(`/api/interview/${session.sessionId}/end`, 'POST');
+        answer.value = '';
+        showEnded();
+    } catch (error) {
+        setError(roomError, error.message);
+        reauthButton.hidden = Boolean(token);
+        if (!token) {
+            reauthButton.focus({ preventScroll: true });
+        }
+    } finally {
+        pending = false;
+        updateRoomActions();
+    }
 }
 
 async function start() {
@@ -232,6 +326,7 @@ async function start() {
     pending = true;
     startButton.disabled = true;
     setError(setupError);
+    setError(roomError);
     roomPosition.textContent = targetPosition;
     progress.textContent = '首题准备中';
     setup.hidden = true;
@@ -245,18 +340,28 @@ async function start() {
         answer.focus({ preventScroll: true });
     } catch (error) {
         question.remove();
+        let message = error.message;
+        if (error.code === 1003) {
+            try {
+                if (await restoreOngoingInterview()) {
+                    return;
+                }
+            } catch (restoreError) {
+                message = restoreError.message;
+            }
+        }
         room.hidden = true;
         setup.hidden = false;
-        setError(setupError, error.message);
+        setError(setupError, message);
         if (token) {
             resume.focus({ preventScroll: true });
         } else {
-            showLogin(error.message);
+            showLogin(message);
         }
     } finally {
         pending = false;
         startButton.disabled = false;
-        updateSendButton();
+        updateRoomActions();
     }
 }
 
@@ -267,7 +372,7 @@ async function submitAnswer() {
     }
 
     pending = true;
-    updateSendButton();
+    updateRoomActions();
     answer.readOnly = true;
     setError(answerError);
     progress.textContent = '等待面试官回复';
@@ -280,11 +385,8 @@ async function submitAnswer() {
         }, question.add);
         answer.value = '';
         if (session.status === 'ENDED') {
-            composer.hidden = true;
             question.finish('这场面试就到这里。你可以往上回看刚才的问答。');
-            progress.textContent = `已完成 ${session.currentRound} 轮`;
-            restartButton.hidden = false;
-            restartButton.focus({ preventScroll: true });
+            showEnded();
         } else {
             question.finish(session.question);
             progress.textContent = `第 ${session.currentRound} 轮`;
@@ -298,7 +400,7 @@ async function submitAnswer() {
     } finally {
         pending = false;
         answer.readOnly = false;
-        updateSendButton();
+        updateRoomActions();
         if (!composer.hidden) {
             answer.focus({ preventScroll: true });
         }
@@ -308,7 +410,7 @@ async function submitAnswer() {
 loginForm.addEventListener('submit', login);
 setupForm.addEventListener('submit', event => event.preventDefault());
 composer.addEventListener('submit', event => event.preventDefault());
-answer.addEventListener('input', updateSendButton);
+answer.addEventListener('input', updateRoomActions);
 answer.addEventListener('keydown', event => {
     // 一些浏览器在输入法确认候选词时只提供 keyCode 229。
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) {
@@ -321,13 +423,16 @@ answer.addEventListener('keydown', event => {
 });
 startButton.addEventListener('click', start);
 sendButton.addEventListener('click', submitAnswer);
+endButton.addEventListener('click', endInterview);
 reauthButton.addEventListener('click', () => showLogin());
 restartButton.addEventListener('click', () => {
     session = null;
     messages.replaceChildren();
     setError(answerError);
+    setError(roomError);
     restartButton.hidden = true;
     room.hidden = true;
     setup.hidden = false;
+    updateRoomActions();
     position.focus();
 });

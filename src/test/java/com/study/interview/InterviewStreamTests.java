@@ -45,7 +45,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -123,6 +125,63 @@ class InterviewStreamTests {
     }
 
     @Test
+    void ongoingDetailUsesVerifiedUserAndAllowsNoCurrentSession() throws Exception {
+        mvc.perform(get("/api/interview/ongoing")).andExpect(status().isUnauthorized());
+        InterviewSessionSummary session = new InterviewSessionSummary(7L, "后端", null, "ONGOING", 1);
+        InterviewDetail.Message question = new InterviewDetail.Message(11L, "INTERVIEWER", 1, "你如何分页？", null);
+        when(sessions.ongoingDetail(1L)).thenReturn(new InterviewDetail(session, List.of(question)));
+
+        mvc.perform(get("/api/interview/ongoing").header("Authorization", "Bearer " + tokenService.issue(1L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.id").value(7))
+                .andExpect(jsonPath("$.data.messages[0].content").value("你如何分页？"));
+        mvc.perform(get("/api/interview/ongoing").header("Authorization", "Bearer " + tokenService.issue(2L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(sessions).ongoingDetail(1L);
+        verify(sessions).ongoingDetail(2L);
+        verifyNoInteractions(chatClient, redis);
+    }
+
+    @Test
+    void manualEndRequiresAuthenticationAndUsesVerifiedUserId() throws Exception {
+        mvc.perform(post("/api/interview/7/end")).andExpect(status().isUnauthorized());
+        doThrow(new BizException(1002, HttpStatus.NOT_FOUND, "面试会话不存在"))
+                .when(sessions).endSession(7L, 2L);
+
+        mvc.perform(authenticatedPost("/api/interview/7/end", 2L).queryParam("userId", "1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(1002));
+        mvc.perform(authenticatedPost("/api/interview/7/end", 1L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        verify(sessions).endSession(7L, 2L);
+        verify(sessions).endSession(7L, 1L);
+        verifyNoInteractions(chatClient, redis);
+    }
+
+    @Test
+    void endedSessionRejectsBothAnswerEndpointsBeforeModelCall() throws Exception {
+        InterviewSession ended = new InterviewSession();
+        ended.setStatus(InterviewSession.STATUS_ENDED);
+        when(sessions.getOwnedSessionOrThrow(7L, 1L)).thenReturn(ended);
+        String answer = """
+                {"roundNo":1,"answerText":"按主键排序"}
+                """;
+
+        mvc.perform(authenticatedPost("/api/interview/7/answer", 1L).content(answer))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(1003));
+        assertThat(stream("/api/interview/7/answer", answer))
+                .contains("event:problem", "\"code\":1003")
+                .doesNotContain("event:delta", "event:done");
+        verifyNoInteractions(chatClient);
+    }
+
+    @Test
     void streamsFirstQuestionThenConfirmsSaveAndCountsRequestOnce() throws Exception {
         modelChunks(Flux.just("你如何", "分页？"));
         when(sessions.createSessionAndFirstMessage(1L, "项目经历", "后端", "你如何分页？")).thenReturn(7L);
@@ -146,7 +205,38 @@ class InterviewStreamTests {
                 """);
 
         assertThat(body).containsSubsequence("event:delta", "半道题", "event:problem").doesNotContain("event:done");
-        verifyNoInteractions(sessions);
+        verify(sessions, never()).createSessionAndFirstMessage(any(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void ongoingSessionBlocksBothStartEndpointsBeforeModelCall() throws Exception {
+        doThrow(new BizException(1003, HttpStatus.CONFLICT, "已有进行中的面试"))
+                .when(sessions).ensureNoOngoingSession(1L);
+        String start = """
+                {"resumeText":"项目经历","targetPosition":"后端"}
+                """;
+
+        mvc.perform(authenticatedPost("/api/interview/start", 1L).content(start))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(1003));
+
+        assertThat(stream("/api/interview/start", start))
+                .contains("event:problem", "\"code\":1003")
+                .doesNotContain("event:delta", "event:done");
+        verifyNoInteractions(chatClient);
+        verify(sessions, never()).createSessionAndFirstMessage(any(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void concurrentStartConflictAfterModelOutputDoesNotConfirmTheStream() throws Exception {
+        modelChunks(Flux.just("你如何分页？"));
+        when(sessions.createSessionAndFirstMessage(1L, "项目经历", "后端", "你如何分页？"))
+                .thenThrow(new BizException(1003, HttpStatus.CONFLICT, "已有进行中的面试"));
+
+        assertThat(stream("/api/interview/start", """
+                {"resumeText":"项目经历","targetPosition":"后端"}
+                """)).containsSubsequence("event:delta", "event:problem", "\"code\":1003")
+                .doesNotContain("event:done");
     }
 
     @Test

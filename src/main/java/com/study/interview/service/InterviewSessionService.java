@@ -8,6 +8,7 @@ import com.study.interview.controller.dto.InterviewSessionSummary;
 import com.study.interview.exception.BizException;
 import com.study.interview.mapper.InterviewMessageMapper;
 import com.study.interview.mapper.InterviewSessionMapper;
+import com.study.interview.mapper.UserAccountMapper;
 import com.study.interview.model.InterviewMessage;
 import com.study.interview.model.InterviewSession;
 import org.springframework.http.HttpStatus;
@@ -18,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * 面试会话的数据库读写层：只管会话表 + 消息表这两张相关表的读写操作。
+ * 面试会话和消息的数据库读写，开场时通过账号行锁串行化同账号请求。
  *
  * 为什么要把「会话 + 消息」的操作单独做成一个 Spring Bean，
  * 而不是写在 InterviewService 里当私有方法：
@@ -32,33 +33,32 @@ public class InterviewSessionService {
 
     private final InterviewSessionMapper sessionMapper;
     private final InterviewMessageMapper messageMapper;
+    private final UserAccountMapper accountMapper;
 
-    // 构造器注入：本类同包，两个 Mapper 都由 @MapperScan 注册、Spring 自动装配
-    public InterviewSessionService(InterviewSessionMapper sessionMapper, InterviewMessageMapper messageMapper) {
+    public InterviewSessionService(InterviewSessionMapper sessionMapper, InterviewMessageMapper messageMapper,
+                                   UserAccountMapper accountMapper) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
+        this.accountMapper = accountMapper;
+    }
+
+    public void ensureNoOngoingSession(Long currentUserId) {
+        if (sessionMapper.findOngoingSessionId(currentUserId) != null) {
+            throw new BizException(1003, HttpStatus.CONFLICT, "已有进行中的面试，请继续当前面试或结束后再开场");
+        }
     }
 
     /**
-     * 短事务：一次保存「会话 + 首条消息」两条写。
-     *
-     * 为什么这两条 INSERT 必须同一个事务（本交付最要紧的边界）：
-     *   它们是一条业务数据的两个半件——会话没有消息 = 一场「哑巴面试」，
-     *   消息没有会话 = 没人认领的孤儿。分开提交，任何一条中途失败
-     *   （比如消息表 insert 时数据库抖动）都会留下半截脏数据。
-     *   包进一个事务 = 「要么两条都进库，要么都不进库」。
-     *
-     * 为什么事务边界恰好只包这两条写、绝不上移到包 AI 调用：
-     *   @Transactional 的语义是「方法一进来就借连接、方法结束才归还」。
-     *   AI 出题要等几秒到几十秒，把它包进事务 = 连接被白白占用，
-     *   连接池（HikariCP 默认 10 格）会被慢调用拖垮，无辜的快查询全部排队。
-     *   （与 ResumeReviewService「AI 慢调用放事务外」同款边界。）
-     *
-     * 事务生效的触发条件：任何 RuntimeException（含 BizException、insert 抛的库异常）
-     * 冒泡出本方法，Spring 就回滚两条写——本方法只负责抛，不负责 catch。
+     * 所有开场写入先锁同一个账号行，拿到锁后重新查已提交的进行中会话。
+     * 会话与首题在同一短事务里提交，生成首题由调用方在事务外完成。
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Long createSessionAndFirstMessage(Long currentUserId, String resumeText, String targetPosition, String question) {
+        if (accountMapper.lockById(currentUserId) == null) {
+            throw new BizException(1002, HttpStatus.NOT_FOUND, "账号不存在");
+        }
+        ensureNoOngoingSession(currentUserId);
+
         // 第一条写：会话表。currentRound=1、maxRound=8、status=ONGOING
         // 都是「开始一场面试」的固有初始值，由代码写死，不信任调用方传入
         InterviewSession session = new InterviewSession();
@@ -108,6 +108,12 @@ public class InterviewSessionService {
                 .map(this::toSessionSummary)
                 .toList());
         return result;
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public InterviewDetail ongoingDetail(Long currentUserId) {
+        Long sessionId = sessionMapper.findOngoingSessionId(currentUserId);
+        return sessionId == null ? null : detail(sessionId, currentUserId);
     }
 
     // 会话状态和消息使用同一份快照，避免读到提交回答前的轮次和提交后的消息。
@@ -167,6 +173,21 @@ public class InterviewSessionService {
     }
 
     // ---------- 写：短事务推进轮次 / 结束会话 ----------
+
+    public void endSession(Long sessionId, Long currentUserId) {
+        int updated = sessionMapper.update(null, new LambdaUpdateWrapper<InterviewSession>()
+                .eq(InterviewSession::getId, sessionId)
+                .eq(InterviewSession::getUserId, currentUserId)
+                .eq(InterviewSession::getStatus, InterviewSession.STATUS_ONGOING)
+                .set(InterviewSession::getStatus, InterviewSession.STATUS_ENDED));
+        if (updated > 0) {
+            return;
+        }
+        InterviewSession session = getOwnedSessionOrThrow(sessionId, currentUserId);
+        if (!InterviewSession.STATUS_ENDED.equals(session.getStatus())) {
+            throw new BizException(1003, HttpStatus.CONFLICT, "会话状态已变化，请刷新后重试");
+        }
+    }
 
     /**
      * 短事务：普通轮次提交 = 条件更新轮次 + 写候选人回答 + 写下一轮题目。

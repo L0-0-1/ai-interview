@@ -47,9 +47,20 @@ public class InterviewController {
         return Result.success(sessionService.history(Long.valueOf(jwt.getSubject()), page, size));
     }
 
+    @GetMapping("/ongoing")
+    public Result<InterviewDetail> ongoing(@AuthenticationPrincipal Jwt jwt) {
+        return Result.success(sessionService.ongoingDetail(Long.valueOf(jwt.getSubject())));
+    }
+
     @GetMapping("/{sessionId}")
     public Result<InterviewDetail> detail(@PathVariable Long sessionId, @AuthenticationPrincipal Jwt jwt) {
         return Result.success(sessionService.detail(sessionId, Long.valueOf(jwt.getSubject())));
+    }
+
+    @PostMapping("/{sessionId}/end")
+    public Result<Void> end(@PathVariable Long sessionId, @AuthenticationPrincipal Jwt jwt) {
+        sessionService.endSession(sessionId, Long.valueOf(jwt.getSubject()));
+        return Result.success(null);
     }
 
     // 开始一场模拟面试：简历全文进模型，成本与简历评审同级，配额收紧到 60 秒 3 次

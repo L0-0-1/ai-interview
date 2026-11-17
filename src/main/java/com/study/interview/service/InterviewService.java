@@ -28,17 +28,17 @@ public class InterviewService {
     }
 
     public InterviewStartResponse start(Long currentUserId, String resumeText, String targetPosition) {
-        validateStart(resumeText, targetPosition);
+        validateStart(currentUserId, resumeText, targetPosition);
         String question = firstQuestion(resumeText, targetPosition).call().content();
         return saveStart(currentUserId, resumeText, targetPosition, question);
     }
 
     public Flux<StreamEvent> streamStart(Long currentUserId, String resumeText, String targetPosition) {
         return Flux.defer(() -> {
-            validateStart(resumeText, targetPosition);
+            validateStart(currentUserId, resumeText, targetPosition);
             return streamQuestion(firstQuestion(resumeText, targetPosition),
                     question -> saveStart(currentUserId, resumeText, targetPosition, question));
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public InterviewAnswerResponse answer(Long sessionId, Long currentUserId, Integer roundNo, String answerText) {
@@ -80,13 +80,14 @@ public class InterviewService {
                         .subscribeOn(Schedulers.boundedElastic()));
     }
 
-    private void validateStart(String resumeText, String targetPosition) {
+    private void validateStart(Long currentUserId, String resumeText, String targetPosition) {
         if (resumeText == null || resumeText.isBlank()) {
             throw new BizException(1001, "简历内容不能为空");
         }
         if (targetPosition == null || targetPosition.isBlank()) {
             throw new BizException(1001, "目标岗位不能为空");
         }
+        interviewSessionService.ensureNoOngoingSession(currentUserId);
     }
 
     private InterviewSession validateAnswer(Long sessionId, Long currentUserId, Integer roundNo, String answerText) {

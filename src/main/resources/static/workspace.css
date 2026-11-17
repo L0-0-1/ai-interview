@@ -47,7 +47,8 @@ h1, h2, p { margin: 0; }
 .button-primary:hover:not(:disabled) { background: var(--accent-dark); }
 .button-primary:disabled { opacity: .58; }
 .button-secondary { border-color: var(--line); background: var(--paper); color: var(--ink); }
-.button-secondary:hover { border-color: var(--accent); }
+.button-secondary:hover:not(:disabled) { border-color: var(--accent); }
+.button-secondary:disabled { opacity: .58; }
 
 .home { padding-block: clamp(48px, 9vw, 108px) 64px; }
 .home-intro { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: clamp(30px, 7vw, 96px); }
@@ -113,5 +114,6 @@ textarea { resize: vertical; }
     .room-position { grid-column: 1; grid-row: 2; margin: 0; }
     .room-progress { grid-column: 2; grid-row: 1; margin: 0; }
     .room-sidebar .button { grid-column: 2; grid-row: 2; justify-self: end; margin: 0; }
+    .room-sidebar .error-text { grid-column: 1 / -1; }
     .preview-dialogue { padding: 18px; }
 }
