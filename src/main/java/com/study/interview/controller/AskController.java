@@ -16,7 +16,7 @@ public class AskController {
         this.askService = askService;
     }
     // 简单问答成本较低（只检索 + 一次对话），配额放宽到 60 秒 5 次
-    @RateLimit(limit = 1, windowSeconds = 60)
+    @RateLimit(limit = 3, windowSeconds = 60)
     @PostMapping("/question")
     public Result<String> askQuestion(@RequestBody QuestionRequest request) {
         return Result.success(askService.ask(request.question()));

@@ -5,9 +5,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.study.interview.config.RateLimit;
 import com.study.interview.controller.dto.InterviewAnswerResponse;
 import com.study.interview.controller.dto.InterviewDetail;
+import com.study.interview.controller.dto.InterviewRoundReview;
 import com.study.interview.controller.dto.InterviewSessionSummary;
 import com.study.interview.controller.dto.InterviewStartResponse;
 import com.study.interview.exception.BizException;
+import com.study.interview.service.InterviewReviewService;
 import com.study.interview.service.InterviewService;
 import com.study.interview.service.InterviewSessionService;
 import org.slf4j.Logger;
@@ -34,17 +36,21 @@ public class InterviewController {
 
     private final InterviewService interviewService;
     private final InterviewSessionService sessionService;
+    private final InterviewReviewService reviewService;
 
-    public InterviewController(InterviewService interviewService, InterviewSessionService sessionService) {
+    public InterviewController(InterviewService interviewService, InterviewSessionService sessionService,
+                               InterviewReviewService reviewService) {
         this.interviewService = interviewService;
         this.sessionService = sessionService;
+        this.reviewService = reviewService;
     }
 
     @GetMapping("/history")
     public Result<Page<InterviewSessionSummary>> history(@AuthenticationPrincipal Jwt jwt,
                                                          @RequestParam(defaultValue = "1") int page,
-                                                         @RequestParam(defaultValue = "10") int size) {
-        return Result.success(sessionService.history(Long.valueOf(jwt.getSubject()), page, size));
+                                                         @RequestParam(defaultValue = "10") int size,
+                                                         @RequestParam(required = false) String status) {
+        return Result.success(sessionService.history(Long.valueOf(jwt.getSubject()), page, size, status));
     }
 
     @GetMapping("/ongoing")
@@ -61,6 +67,13 @@ public class InterviewController {
     public Result<Void> end(@PathVariable Long sessionId, @AuthenticationPrincipal Jwt jwt) {
         sessionService.endSession(sessionId, Long.valueOf(jwt.getSubject()));
         return Result.success(null);
+    }
+
+    @RateLimit(limit = 3, windowSeconds = 60)
+    @PostMapping("/{sessionId}/review")
+    public Result<InterviewRoundReview> review(@PathVariable Long sessionId, @RequestParam int roundNo,
+                                               @AuthenticationPrincipal Jwt jwt) {
+        return Result.success(reviewService.reviewRound(sessionId, Long.valueOf(jwt.getSubject()), roundNo));
     }
 
     // 开始一场模拟面试：简历全文进模型，成本与简历评审同级，配额收紧到 60 秒 3 次

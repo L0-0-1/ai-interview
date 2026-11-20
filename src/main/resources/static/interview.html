@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>模拟面试 · 面试练习室</title>
     <link rel="stylesheet" href="/workspace.css">
+    <script async src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js"></script>
     <script type="module" src="/interview.js"></script>
 </head>
 <body class="interview-page">
@@ -33,6 +35,8 @@
             <button class="button button-primary" id="login-button" type="submit">登录</button>
         </form>
         <form class="setup-form" id="setup-form" hidden>
+            <button class="button button-secondary history-trigger" id="history-open" type="button"
+                    aria-haspopup="dialog">从已结束面试选题</button>
             <label for="target-position">目标岗位</label>
             <input id="target-position" placeholder="例如 Java 后端开发实习生" required>
             <label for="resume-text">简历内容</label>
@@ -69,5 +73,51 @@
         </div>
     </section>
 </main>
+
+<template id="round-review-template">
+    <section class="round-review" aria-label="本轮复盘">
+        <button class="button button-secondary" type="button" data-review>复盘这一轮</button>
+        <p class="room-progress" role="status" data-status hidden></p>
+        <p class="review-text" data-feedback tabindex="-1" hidden></p>
+        <p class="review-text" data-missing hidden></p>
+        <button class="button button-primary" type="button" data-practice hidden>练这道题</button>
+        <p class="error-text" role="alert" data-error hidden></p>
+    </section>
+</template>
+
+<dialog class="interview-dialog" id="history-dialog" aria-labelledby="history-title">
+    <form method="dialog" class="dialog-heading">
+        <h2 id="history-title">已结束的面试</h2>
+        <button class="button button-secondary">关闭</button>
+    </form>
+    <p class="room-progress" id="history-status" role="status" hidden></p>
+    <ul class="history-list" id="history-list"></ul>
+    <p class="error-text" id="history-error" role="alert" hidden></p>
+    <button class="button button-secondary" id="history-more" type="button" hidden>加载更多</button>
+</dialog>
+
+<dialog class="interview-dialog" id="practice-dialog" aria-labelledby="practice-title">
+    <form method="dialog" class="dialog-heading">
+        <h2 id="practice-title">专项练习</h2>
+        <button class="button button-secondary">关闭</button>
+    </form>
+    <p class="review-text" id="practice-question"></p>
+    <form id="practice-form" hidden>
+        <label for="practice-answer">你的回答</label>
+        <textarea id="practice-answer" rows="4" maxlength="2000" required></textarea>
+        <button class="button button-primary" id="practice-submit" type="submit">提交回答</button>
+    </form>
+    <p class="room-progress" id="practice-status" role="status" hidden></p>
+    <p class="error-text" id="practice-error" role="alert" hidden></p>
+    <section id="practice-result" class="practice-result" aria-labelledby="practice-result-title" hidden>
+        <h3 id="practice-result-title" tabindex="-1">作答反馈</h3>
+        <p class="review-text" id="practice-feedback"></p>
+        <h3>参考要点</h3>
+        <p class="review-text" id="practice-scoring-points"></p>
+        <a id="practice-source" target="_blank" rel="noopener" hidden>查看参考资料</a>
+        <button class="button button-secondary" id="practice-explain" type="button" hidden>解释这一点</button>
+        <div class="practice-explanation" id="practice-explanation" role="status" hidden></div>
+    </section>
+</dialog>
 </body>
 </html>

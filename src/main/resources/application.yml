@@ -44,13 +44,27 @@ spring:
 ## ---------- MyBatis-Plus（阶段1）----------
 mybatis-plus:
   configuration:
-    # 把 Plus 生成并执行的真实 SQL 打到控制台——治「SQL 隐身」；学习期开，生产环境要去掉
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 把 Plus 生成并执行的真实 SQL 打到控制台——治「SQL 隐身」；学习期开，生产环境要去掉。
+    # 用 Slf4jImpl 而不是 StdOutImpl：StdOutImpl 会绕开日志框架直接 System.out，
+    # 启动时甩一行「Logging initialized using ... StdOutImpl adapter」，而且级别没法调。
+    # 换成 slf4j 后由下面的 logging.level 控制，想关（生产环境）只需把 mapper 包降成 INFO。
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 logging:
   level:
-    # 打开后能看到 Spring AI 实际发出的请求和收到的响应，排错时非常有用
-    org.springframework.ai: DEBUG
+    # 不要给整个 org.springframework.ai 开 DEBUG：启动期各种 Class.forName 可选依赖探测
+    # 也会跟着打出来（例如 ToolCallingAutoConfiguration 找不到 oauth2 的
+    # ClientAuthorizationException —— 项目没引 spring-security-oauth2-client，纯探测噪音）。
+    # 改为：父包抬到 INFO，只对真正想看请求响应的子包开 DEBUG。
+    org.springframework.ai: INFO
+    org.springframework.ai.chat: DEBUG
+    org.springframework.ai.openai: DEBUG
+    org.springframework.ai.vectorstore: DEBUG
+    # MyBatis-Plus 雪花算法会按本机网卡 IP 反推 workerId，启动时刷
+    # 「Get /172.24.208.1 network interface」「Initialization Sequence datacenterId:.. workerId:..」，纯噪音
+    com.baomidou.mybatisplus.core.toolkit.Sequence: WARN
+    # SQL 日志改走 slf4j 后，要靠这个 logger 才看得到 Preparing / Parameters / Total
+    com.study.interview.mapper: DEBUG
 
 ---
 ## ---------- 方案 A：DeepSeek 官方 ----------
@@ -89,3 +103,7 @@ spring:
         options:
           model: deepseek-v4-flash-0731
           temperature: 0.7
+#rag库存入开关
+interview:
+  rag:
+    import-javaguide: false

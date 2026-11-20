@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -62,10 +64,12 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             return true; // 没挂注解的接口不限流（历史查询等免费接口不受影响）
         }
 
-        // 「来源」用客户端 IP 识别（本项目还没有登录体系，IP 是现实选择）。
-        // 已知局限：同一 NAT 下多人共用 IP 会被误伤；挂代理时取真实 IP 要读 X-Forwarded-For，
-        // 而那个头可以被伪造——生产要么先上登录体系按用户限，要么在可信代理层取 IP。
-        String key = "rate:" + request.getRequestURI() + ":" + request.getRemoteAddr();
+        // Spring Security 先验证 JWT。公开接口的匿名请求仍用 IP 计数。
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        String source = authentication instanceof JwtAuthenticationToken jwt
+                ? "user:" + jwt.getToken().getSubject()
+                : request.getRemoteAddr();
+        String key = "rate:" + request.getRequestURI() + ":" + source;
 
         Long count;
         try {

@@ -20,10 +20,14 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain currentUserSecurity(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
-        return http.securityMatcher("/api/auth/me", "/api/interview/**")
+        return http.securityMatcher("/api/auth/me", "/api/interview/**", "/ask/question",
+                        "/api/resume/review", "/api/resume/save")
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/interview/**"))
-                .authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/interview/**", "/ask/question",
+                        "/api/resume/review", "/api/resume/save"))
+                .authorizeHttpRequests(requests -> requests
+                        .requestMatchers("/api/auth/me", "/api/interview/**").authenticated()
+                        .anyRequest().permitAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.decoder(jwtDecoder)))
                 .build();
     }

@@ -92,15 +92,20 @@ public class InterviewSessionService {
 
     // ---------- 读：提交回答前的存在性 / 状态 / 题目检查 ----------
 
-    public Page<InterviewSessionSummary> history(Long currentUserId, int current, int size) {
+    public Page<InterviewSessionSummary> history(Long currentUserId, int current, int size, String status) {
         if (current < 1 || size < 1 || size > 50) {
             throw new BizException(1001, "分页参数不合法：page 从 1 起，size 在 1-50 之间");
+        }
+        if (status != null && !InterviewSession.STATUS_ENDED.equals(status)
+                && !InterviewSession.STATUS_ONGOING.equals(status)) {
+            throw new BizException(1001, "status 必须为 ENDED 或 ONGOING");
         }
         var query = new LambdaQueryWrapper<InterviewSession>()
                 .select(InterviewSession::getId, InterviewSession::getTargetPosition,
                         InterviewSession::getCreateTime, InterviewSession::getStatus,
                         InterviewSession::getCurrentRound)
                 .eq(InterviewSession::getUserId, currentUserId)
+                .eq(status != null, InterviewSession::getStatus, status)
                 .orderByDesc(InterviewSession::getId);
         Page<InterviewSession> sessions = sessionMapper.selectPage(new Page<>(current, size), query);
         Page<InterviewSessionSummary> result = new Page<>(sessions.getCurrent(), sessions.getSize(), sessions.getTotal());
